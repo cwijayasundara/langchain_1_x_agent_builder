@@ -98,7 +98,8 @@ class MiddlewareFactory:
             return None
 
         middleware_type = middleware_config.type
-        params = middleware_config.params or {}
+        # Copy params to avoid mutating the original config (which gets serialized to YAML)
+        params = dict(middleware_config.params) if middleware_config.params else {}
 
         logger.debug(f"Creating middleware: type={middleware_type}, params={params}")
 
