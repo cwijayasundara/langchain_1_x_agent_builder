@@ -296,7 +296,13 @@ mcp_servers:
 Uses `langchain.chat_models.init_chat_model()` for provider-agnostic initialization:
 - API keys from environment or config override
 - Provider parameter mapping in `AgentFactory.create_llm()`
-- Supported: OpenAI, Anthropic, Google, Groq
+- Supported: OpenAI, Anthropic, Google, Groq, OpenRouter (100+ models)
+
+**OpenRouter Integration**:
+- Access 100+ models from multiple providers through a single API
+- Models specified as `provider/model` format (e.g., `anthropic/claude-3.5-sonnet`)
+- Configure via `OPENROUTER_API_KEY` environment variable
+- Full model list loaded from `configs/llm_providers.yaml`
 
 **Key LangChain 1.x Imports:**
 ```python
@@ -347,6 +353,59 @@ Agents are created once and cached in `AgentFactory._agents`:
 - Value: `{"agent": agent_instance, "config": AgentConfig, "store": Store, "created_at": datetime}`
 - Deploy = create + cache, Undeploy = remove from cache
 - Redeploy = remove + reload config + create + cache
+
+### Runtime Override System
+
+The runtime override feature allows testing agents with different configurations without modifying the base agent:
+
+**Architecture**:
+- **Variant Agents**: Temporary agents created with overridden config
+- **Session-Scoped**: Overrides persist for the conversation thread (thread_id)
+- **Cache Key**: `{agent_id}:{thread_id}` for session-specific variants
+- **Non-Destructive**: Base agent remains unchanged
+
+**Key Components**:
+- `AgentFactory.create_variant_agent()`: Creates agent with override config
+- `AgentFactory._session_overrides`: Cache for session override metadata
+- `RuntimeOverride` schema in `models/schemas.py`: Override configuration structure
+
+**Override Options**:
+```python
+{
+    "llm": {
+        "provider": "openrouter",  # Switch provider
+        "model": "anthropic/claude-3.5-sonnet",  # Switch model
+        "temperature": 0.5,  # Adjust temperature
+        "max_tokens": 2000  # Adjust max tokens
+    },
+    "tools": {
+        "builtin_tools": ["tavily_search"],  # Override tool set
+        "mcp_servers": ["calculator"]  # Override MCP servers
+    },
+    "prompt": {
+        "prepend": "Debug mode enabled.",  # Add before system prompt
+        "append": "Always explain reasoning."  # Add after system prompt
+    },
+    "auto_update_prompt": True  # Regenerate tool docs on tool change
+}
+```
+
+**API Endpoints**:
+- `POST /execution/{agent_id}/invoke` with `runtime_override` in body
+- `GET /execution/{agent_id}/available-tools` - List tools for override selection
+- `GET /execution/{agent_id}/session-override/{thread_id}` - Get current override
+- `DELETE /execution/{agent_id}/session-override/{thread_id}` - Clear override
+
+**UI Integration**:
+- Agent Builder: `agent_builder/components/test_override_panel.py` - Override controls in Deploy page
+- Agent UI: `agent_ui/components/runtime_override_panel.py` - Override controls in Chat sidebar
+
+**Flow**:
+1. User configures override in UI (LLM, tools, or prompt)
+2. Override sent with invoke request via `runtime_override` field
+3. `AgentFactory.create_variant_agent()` creates temporary agent
+4. Variant agent cached with session key for subsequent requests
+5. Clear override removes variant and reverts to base agent
 
 ### Middleware Order Matters
 Middleware executes in the order defined in YAML config. The `MiddlewareFactory.create_middleware_list()` maintains this order when passing to `create_agent()`.
@@ -581,7 +640,9 @@ agent_builder/
 └── components/          # Reusable UI components
     ├── yaml_preview.py  # Live YAML preview with download
     ├── navigation.py    # Page header, progress tracking
-    └── template_selector.py # Template selection UI
+    ├── template_selector.py # Template selection UI
+    ├── chat_interface.py # Test chat after deployment
+    └── test_override_panel.py # Runtime override controls for testing
 
 agent_ui/
 ├── app.py               # Main entry point, agent selection
@@ -601,7 +662,8 @@ agent_ui/
     ├── message_renderer.py # Individual message display
     ├── streaming_handler.py # WebSocket streaming logic
     ├── thread_panel.py  # Thread list sidebar
-    └── context_editor.py # Runtime context editor
+    ├── context_editor.py # Runtime context editor
+    └── runtime_override_panel.py # Runtime override controls for chat
 ```
 
 **Separation of concerns**:
@@ -702,6 +764,14 @@ When testing components that use LLMs, use `GenericFakeChatModel` for mocking or
 **Phase 3 COMPLETE**: Agent UI (Streamlit) - Full-featured chat interface with agent selection, real-time messaging (streaming and non-streaming), thread management, context editor, tool visualization, and conversation export.
 
 **Phase 4 COMPLETE**: MCP Server Management - Standalone MCP server definitions in `configs/mcp_servers/`, reference-based linking in agent configs, per-agent tool filtering override, API endpoints for CRUD and tool discovery, Agent Builder UI integration for server selection, and migration script for existing configs.
+
+**Phase 5 COMPLETE**: Runtime Override & OpenRouter Integration
+- Runtime override system for testing with different LLM/tools/prompts without redeploying
+- Session-scoped variant agents with caching
+- API endpoints for session override management
+- UI components in both Agent Builder and Agent UI
+- OpenRouter integration with 100+ models accessible via unified API
+- Dynamic LLM provider/model selection from YAML config
 
 **Not yet implemented**:
 - RAG integration (config schema exists, implementation pending)

@@ -5,7 +5,7 @@ A comprehensive agent configurator system for creating, managing, and deploying 
 ## Features
 
 - **Configuration-Driven Agent Creation**: Define agents using simple YAML files
-- **Multi-LLM Support**: OpenAI, Anthropic, Google Gemini, and Groq
+- **Multi-LLM Support**: OpenAI, Anthropic, Google Gemini, Groq, and OpenRouter (100+ models)
 - **Built-in Tools**: Web search (Tavily), code execution, and more
 - **Tool Categorization**: Automatic categorization of tools (computation, search, retrieval, etc.)
 - **Smart Tool Selection**: Auto-enabled tool filtering for agents with 5+ tools (85-90% token reduction)
@@ -13,6 +13,7 @@ A comprehensive agent configurator system for creating, managing, and deploying 
 - **Memory Management**: Short-term (checkpointer) and long-term (store) memory
 - **Middleware System**: Summarization, PII detection, rate limiting, retries, tool selection, and more
 - **Streaming Support**: Real-time token streaming via WebSocket
+- **Runtime Override**: Test agents with different LLM/tools/prompts without redeploying
 - **REST API**: Complete FastAPI-based API for agent management
 - **Interactive UIs**: Separate interfaces for building and interacting with agents
 
@@ -105,12 +106,12 @@ The UI will be available at http://localhost:8501
 **Page Flow**:
 1. **Basic Info** - Agent name, description, version, tags
 2. **LLM Config** - LLM provider, model, temperature, tokens
-3. **Prompts** - System prompt, user template, variables
-4. **Tools** - Built-in tool selection
+3. **Tools** - Built-in tool selection + MCP server selection
+4. **Prompts** - System prompt, user template, variables
 5. **Memory** - Short-term and long-term memory configuration
 6. **Middleware** - Processing middleware with presets
 7. **Advanced** - Streaming modes and runtime options
-8. **Deploy** - Review, validate, and deploy your agent
+8. **Deploy** - Review, validate, deploy, and test with runtime overrides
 
 ### Running the Agent UI
 
@@ -127,6 +128,7 @@ The UI will be available at http://localhost:8502
 **Features**:
 - **Agent Selection**: Browse and select from deployed agents with search and filtering
 - **Real-time Chat**: Interactive chat interface with support for both streaming and non-streaming modes
+- **Runtime Override**: Test with different LLM providers/models, tools, and prompt modifications without redeploying
 - **Thread Management**: Create and manage multiple conversation threads per agent
 - **Context Editor**: Configure runtime context values based on agent's schema
 - **Tool Visualization**: See tool calls with arguments and results in expandable sections
@@ -282,7 +284,7 @@ tags: list[string]              # Optional: Tags for organization
 
 # LLM Configuration
 llm:
-  provider: openai|anthropic|google|groq  # Required
+  provider: openai|anthropic|google|groq|openrouter  # Required
   model: string                           # Required: Model identifier
   temperature: float                      # Default: 0.7 (0.0-2.0)
   max_tokens: int                         # Default: 4096
@@ -427,6 +429,9 @@ middleware:
 - `WS /execution/{agent_id}/stream` - Stream agent execution (WebSocket)
 - `POST /execution/{agent_id}/deploy` - Deploy agent
 - `POST /execution/{agent_id}/undeploy` - Undeploy agent
+- `GET /execution/{agent_id}/available-tools` - Get available tools for runtime override
+- `GET /execution/{agent_id}/session-override/{thread_id}` - Get current session override
+- `DELETE /execution/{agent_id}/session-override/{thread_id}` - Clear session override
 
 ### Tool Management
 
@@ -478,6 +483,71 @@ curl -X POST "http://localhost:8000/tools/temperature_converter/approve" \
   }'
 ```
 
+## Runtime Override
+
+The Runtime Override feature allows you to test agents with different configurations without modifying or redeploying the base agent. This is useful for:
+- A/B testing different LLM models
+- Testing with reduced/expanded tool sets
+- Experimenting with prompt modifications
+- Debugging agent behavior
+
+### Using Runtime Override
+
+#### Via API
+
+Include a `runtime_override` object in your invoke request:
+
+```bash
+curl -X POST "http://localhost:8000/execution/my_agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello"}],
+    "thread_id": "my-session-123",
+    "runtime_override": {
+      "llm": {
+        "provider": "openrouter",
+        "model": "anthropic/claude-3.5-sonnet",
+        "temperature": 0.5
+      },
+      "tools": {
+        "builtin_tools": ["tavily_search", "calculator"],
+        "mcp_servers": ["rag"]
+      },
+      "prompt": {
+        "prepend": "You are in debug mode.",
+        "append": "Always explain your reasoning."
+      }
+    }
+  }'
+```
+
+#### Via Agent Builder UI
+
+After deploying an agent on the Deploy page:
+1. The page switches to a two-column layout with chat on the left
+2. Use the **Runtime Overrides** panel on the right to:
+   - Switch LLM provider/model (supports all providers including OpenRouter)
+   - Adjust temperature and max tokens
+   - Enable/disable specific tools
+   - Add prompt prepend/append text
+3. Click **Apply** to use the override for subsequent messages
+4. Override persists for the session (thread)
+
+#### Via Agent UI
+
+In the Chat page sidebar:
+1. Expand the **Runtime Override** section
+2. Configure LLM, tools, or prompt modifications
+3. Apply to test with the override
+4. Clear to revert to the base agent configuration
+
+### Override Behavior
+
+- **Session-Scoped**: Overrides persist for the conversation thread
+- **Non-Destructive**: Base agent configuration remains unchanged
+- **Variant Agents**: System creates a temporary variant agent with the override
+- **Cached**: Variant agents are cached per session for performance
+
 ## Project Structure
 
 ```
@@ -498,11 +568,18 @@ langchain_1_x_agent_builder/
 │   ├── pages/               # 8-page wizard
 │   ├── utils/               # State management, API client, validators
 │   └── components/          # Reusable UI components
+│       ├── yaml_preview.py      # Live YAML preview
+│       ├── navigation.py        # Page header, progress
+│       ├── chat_interface.py    # Test chat after deployment
+│       └── test_override_panel.py # Runtime override controls
 ├── agent_ui/                # Streamlit chat interface ✅
 │   ├── app.py               # Agent selection
 │   ├── pages/               # Chat, Sessions, Settings
 │   ├── utils/               # Chat utilities, WebSocket, export
 │   └── components/          # Chat components, message rendering
+│       ├── chat_interface.py    # Chat container
+│       ├── message_renderer.py  # Message display
+│       └── runtime_override_panel.py # Runtime override controls
 ├── configs/
 │   ├── templates/           # Pre-built agent templates
 │   └── agents/              # User-created agents
@@ -605,17 +682,21 @@ curl http://localhost:8000/tools/list
 - [x] Tool call visualization
 - [x] UI preferences and settings
 
-### Phase 4: Advanced Features (Current)
+### Phase 4: Advanced Features ✅
+- [x] MCP server support (standalone definitions, reference-based linking, per-agent tool filtering)
+- [x] Runtime Override (test with different LLM/tools/prompts without redeploying)
+- [x] OpenRouter integration (100+ models via unified API)
+
+### Phase 5: Future Features
 - [ ] Memory management UI enhancements
 - [ ] RAG integration
-- [ ] MCP server support
 - [ ] Output formatters
 - [ ] Testing framework with AgentEvals
 - [ ] Custom tool builder UI
 - [ ] Template marketplace
 - [ ] Multi-agent orchestration
 
-### Phase 5: Production Ready
+### Phase 6: Production Ready
 - [ ] Docker deployment
 - [ ] LangSmith integration
 - [ ] Performance optimization
