@@ -29,7 +29,9 @@ with col1:
 
     # AI Prompt Enhancement Section
     st.markdown("### ✨ AI Prompt Enhancement")
-    st.caption("Generate an optimized prompt based on your agent's capabilities and selected tools using GPT-4o-mini")
+    llm_config = get_page_data(2)
+    selected_model = llm_config.get('model', 'your selected LLM')
+    st.caption(f"Generate an optimized prompt based on your agent's capabilities using **{selected_model}**")
 
     col_enhance_info, col_enhance_btn = st.columns([3, 1])
 
@@ -37,7 +39,7 @@ with col1:
         # Get data from previous pages to show context
         tools_data = get_page_data(3)  # Tools page
         basic_info = get_page_data(1)
-        llm_config = get_page_data(2)
+        # llm_config already loaded above
 
         tools_count = len(tools_data.get('tools', []))
         mcp_count = len(tools_data.get('mcp_servers', []))
@@ -58,14 +60,15 @@ with col1:
             st.error("❌ Please complete LLM Config (Page 2) first")
         else:
             try:
-                with st.spinner("Enhancing prompt with GPT-4o-mini..."):
+                with st.spinner(f"Enhancing prompt with {selected_model}..."):
                     enhanced = enhance_prompt(
                         current_prompt=current_data.get('system_prompt', ''),
                         agent_name=basic_info.get('name', 'agent'),
                         agent_description=basic_info.get('description', ''),
                         selected_tools=tools_data.get('tools', []),
                         mcp_servers=tools_data.get('mcp_servers', []),
-                        llm_model=llm_config.get('model', 'unknown'),
+                        llm_provider=llm_config.get('provider', 'openai'),
+                        llm_model=llm_config.get('model', 'gpt-4o-mini'),
                         builtin_tools_metadata=BUILTIN_TOOLS
                     )
 

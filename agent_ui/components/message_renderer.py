@@ -58,14 +58,16 @@ def render_message(message: Dict[str, Any], show_timestamp: bool = True, show_me
                 if show_timestamp and timestamp:
                     st.caption(format_timestamp(timestamp))
 
-                # Message content - render with explicit styling for visibility
+                # Message content - render markdown directly for proper formatting
                 if content:
-                    # Render content with inline styling to force visibility
-                    # This ensures text is visible regardless of theme
+                    # Use a container with CSS class for styling
+                    # This allows proper markdown rendering while maintaining visibility
                     st.markdown(
-                        f'<div style="background-color: #F5F5F5 !important; color: #000000 !important; padding: 15px; border-radius: 10px; margin: 5px 0;"><span style="color: #000000 !important;">{content}</span></div>',
+                        '<div class="ai-message-content">',
                         unsafe_allow_html=True
                     )
+                    st.markdown(content)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
                 # Tool calls
                 if tool_calls:
@@ -116,14 +118,16 @@ def render_streaming_message(accumulated_text: str, role: str = "ai"):
         with cols[0]:
             st.markdown(f"**{role_name}** _typing..._")
 
-            # Streaming content - render with visibility fix
+            # Streaming content - render markdown directly for proper formatting
             if accumulated_text:
                 st.markdown(
-                    f'<div style="background-color: #F5F5F5 !important; color: #000000 !important; padding: 15px; border-radius: 10px; margin: 5px 0;"><span style="color: #000000 !important;">{accumulated_text}</span></div>',
+                    '<div class="ai-message-content">',
                     unsafe_allow_html=True
                 )
+                st.markdown(accumulated_text)
+                st.markdown('</div>', unsafe_allow_html=True)
             # Add blinking cursor
-            st.markdown('<span style="animation: blink 1s infinite; color: #000000 !important;">▊</span>', unsafe_allow_html=True)
+            st.markdown('<span class="streaming-cursor">▊</span>', unsafe_allow_html=True)
 
 
 def render_message_list(messages: list, show_timestamps: bool = True, show_metadata: bool = True):
@@ -166,7 +170,7 @@ def render_loading_message(text: str = "Agent is thinking..."):
         with cols[0]:
             st.markdown("**🤖 Agent**")
             st.markdown(
-                f'<div style="background-color: #F5F5F5 !important; padding: 15px; border-radius: 10px; margin: 5px 0; font-style: italic;"><span style="color: #666666 !important;">{text}</span></div>',
+                f'<div class="ai-message-content" style="font-style: italic; color: #666666;">{text}</div>',
                 unsafe_allow_html=True
             )
 
@@ -178,6 +182,28 @@ def inject_message_styles():
     """
     st.markdown("""
     <style>
+    /* AI message content container */
+    .ai-message-content {
+        background-color: #F5F5F5;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 5px 0;
+    }
+
+    [data-theme="dark"] .ai-message-content {
+        background-color: #2d2d2d;
+    }
+
+    /* Streaming cursor */
+    .streaming-cursor {
+        animation: blink 1s infinite;
+        color: #000000;
+    }
+
+    [data-theme="dark"] .streaming-cursor {
+        color: #ffffff;
+    }
+
     /* Blinking cursor for streaming */
     @keyframes blink {
         0%, 49% { opacity: 1; }

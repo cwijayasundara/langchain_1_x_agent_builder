@@ -5,7 +5,7 @@ Middleware factory for creating middleware from configurations.
 import logging
 from typing import Any, Dict, List, Optional
 
-from agent_api.models.config_schema import AgentConfig, MiddlewareConfig
+from agent_api.models.config_schema import AgentConfig, LLMConfig, MiddlewareConfig
 
 logger = logging.getLogger(__name__)
 
@@ -387,13 +387,24 @@ class MiddlewareFactory:
 
         return result
 
-    def get_middleware_presets(self) -> Dict[str, List[MiddlewareConfig]]:
+    def get_middleware_presets(self, llm_config: Optional[LLMConfig] = None) -> Dict[str, List[MiddlewareConfig]]:
         """
         Get predefined middleware presets for common scenarios.
+
+        Args:
+            llm_config: Optional LLM config to derive middleware model from.
+                        If provided, middleware will use the same provider:model.
+                        If None, falls back to openai:gpt-4o-mini.
 
         Returns:
             Dictionary of preset name to middleware configurations
         """
+        # Derive middleware model from agent's LLM config or use fallback
+        if llm_config:
+            middleware_model = f"{llm_config.provider}:{llm_config.model}"
+        else:
+            middleware_model = "openai:gpt-4o-mini"
+
         presets = {
             "production_safe": [
                 MiddlewareConfig(
@@ -413,14 +424,14 @@ class MiddlewareFactory:
                 ),
                 MiddlewareConfig(
                     type="summarization",
-                    params={"model": "openai:gpt-4o-mini", "max_tokens_before_summary": 100000},
+                    params={"model": middleware_model, "max_tokens_before_summary": 100000},
                     enabled=True
                 ),
             ],
             "cost_optimized": [
                 MiddlewareConfig(
                     type="summarization",
-                    params={"model": "openai:gpt-4o-mini", "max_tokens_before_summary": 50000},
+                    params={"model": middleware_model, "max_tokens_before_summary": 50000},
                     enabled=True
                 ),
                 MiddlewareConfig(
@@ -444,7 +455,7 @@ class MiddlewareFactory:
             "high_reliability": [
                 MiddlewareConfig(
                     type="model_fallback",
-                    params={"fallback_models": ["gpt-4o-mini", "gpt-3.5-turbo"]},
+                    params={"fallback_models": [llm_config.model if llm_config else "gpt-4o-mini", "gpt-3.5-turbo"]},
                     enabled=True
                 ),
                 MiddlewareConfig(
@@ -463,7 +474,7 @@ class MiddlewareFactory:
                 MiddlewareConfig(
                     type="llm_tool_selector",
                     params={
-                        "model": "openai:gpt-4o-mini",
+                        "model": middleware_model,
                         "max_tools": 7,
                         "always_include": []
                     },
@@ -476,7 +487,7 @@ class MiddlewareFactory:
                 ),
                 MiddlewareConfig(
                     type="summarization",
-                    params={"model": "openai:gpt-4o-mini", "max_tokens_before_summary": 100000},
+                    params={"model": middleware_model, "max_tokens_before_summary": 100000},
                     enabled=True
                 ),
             ],
@@ -488,7 +499,8 @@ class MiddlewareFactory:
         self,
         total_tool_count: int,
         use_mcp: bool = False,
-        priority: str = "accuracy"
+        priority: str = "accuracy",
+        llm_config: Optional[LLMConfig] = None
     ) -> List[MiddlewareConfig]:
         """
         Recommend middleware configuration based on agent characteristics.
@@ -497,10 +509,19 @@ class MiddlewareFactory:
             total_tool_count: Total number of tools (built-in + MCP)
             use_mcp: Whether agent uses MCP servers
             priority: Optimization priority - "accuracy", "cost", or "balanced"
+            llm_config: Optional LLM config to derive middleware model from.
+                        If provided, middleware will use the same provider:model.
+                        If None, falls back to openai:gpt-4o-mini.
 
         Returns:
             List of recommended middleware configurations
         """
+        # Derive middleware model from agent's LLM config or use fallback
+        if llm_config:
+            middleware_model = f"{llm_config.provider}:{llm_config.model}"
+        else:
+            middleware_model = "openai:gpt-4o-mini"
+
         recommended = []
 
         # For agents with 5+ tools, strongly recommend tool selector
@@ -510,7 +531,7 @@ class MiddlewareFactory:
             recommended.append(MiddlewareConfig(
                 type="llm_tool_selector",
                 params={
-                    "model": "openai:gpt-4o-mini",
+                    "model": middleware_model,
                     "max_tools": max_tools,
                     "always_include": []
                 },
@@ -518,7 +539,7 @@ class MiddlewareFactory:
             ))
             logger.info(
                 f"Recommending llm_tool_selector middleware: "
-                f"{total_tool_count} tools -> max_tools={max_tools}"
+                f"{total_tool_count} tools -> max_tools={max_tools}, model={middleware_model}"
             )
 
         # Always recommend tool retry for reliability
@@ -533,7 +554,7 @@ class MiddlewareFactory:
             recommended.append(MiddlewareConfig(
                 type="summarization",
                 params={
-                    "model": "openai:gpt-4o-mini",
+                    "model": middleware_model,
                     "max_tokens_before_summary": 100000 if priority == "accuracy" else 50000
                 },
                 enabled=True

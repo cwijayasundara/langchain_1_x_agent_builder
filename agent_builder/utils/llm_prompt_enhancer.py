@@ -1,6 +1,6 @@
 """
 LLM-based prompt enhancement utility.
-Uses GPT-4o-mini to enhance system prompts based on agent capabilities.
+Uses the selected LLM provider to enhance system prompts based on agent capabilities.
 """
 
 import os
@@ -14,6 +14,19 @@ project_root = Path(__file__).parent.parent.parent
 env_path = project_root / ".env"
 load_dotenv(dotenv_path=env_path)
 
+# Import LLM_PROVIDERS for env key mapping
+try:
+    from utils.constants import LLM_PROVIDERS
+except ImportError:
+    # Fallback if running standalone
+    LLM_PROVIDERS = {
+        "openai": {"env_key": "OPENAI_API_KEY"},
+        "anthropic": {"env_key": "ANTHROPIC_API_KEY"},
+        "google": {"env_key": "GOOGLE_API_KEY"},
+        "groq": {"env_key": "GROQ_API_KEY"},
+        "openrouter": {"env_key": "OPENROUTER_API_KEY"},
+    }
+
 
 def enhance_prompt(
     current_prompt: str,
@@ -21,11 +34,12 @@ def enhance_prompt(
     agent_description: str,
     selected_tools: List[str],
     mcp_servers: List[Dict[str, Any]],
+    llm_provider: str,
     llm_model: str,
     builtin_tools_metadata: List[Dict[str, str]]
 ) -> str:
     """
-    Enhance a system prompt using GPT-4o-mini based on agent capabilities.
+    Enhance a system prompt using the selected LLM based on agent capabilities.
 
     Args:
         current_prompt: Current system prompt text
@@ -33,6 +47,7 @@ def enhance_prompt(
         agent_description: Description of the agent's purpose
         selected_tools: List of selected built-in tool IDs
         mcp_servers: List of MCP server configurations
+        llm_provider: The LLM provider (openai, anthropic, google, groq, openrouter)
         llm_model: The LLM model being used
         builtin_tools_metadata: Metadata for all builtin tools
 
@@ -40,15 +55,16 @@ def enhance_prompt(
         Enhanced system prompt
 
     Raises:
-        ValueError: If OPENAI_API_KEY is not set
+        ValueError: If required API key is not set
         Exception: If API call fails
     """
-    # Check for API key
-    api_key = os.getenv("OPENAI_API_KEY")
+    # Get the correct API key for the provider
+    env_key = LLM_PROVIDERS.get(llm_provider, {}).get('env_key', f"{llm_provider.upper()}_API_KEY")
+    api_key = os.getenv(env_key)
     if not api_key:
         raise ValueError(
-            "OPENAI_API_KEY not found in environment. "
-            "Please set it in your .env file to use prompt enhancement."
+            f"{env_key} not found in environment. "
+            f"Please set it in your .env file to use prompt enhancement with {llm_provider}."
         )
 
     # Build tool descriptions
@@ -112,26 +128,13 @@ def enhance_prompt(
 Enhanced prompt:"""
 
     try:
-        # Call OpenAI API
-        client = openai.OpenAI(api_key=api_key)
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.7,
-            max_tokens=2000,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at writing clear, effective system prompts for LLM agents. You understand how to guide agents in tool usage, multi-step reasoning, and providing helpful responses."
-                },
-                {
-                    "role": "user",
-                    "content": meta_prompt
-                }
-            ]
+        enhanced_prompt = _call_llm_provider(
+            provider=llm_provider,
+            model=llm_model,
+            api_key=api_key,
+            system_message="You are an expert at writing clear, effective system prompts for LLM agents. You understand how to guide agents in tool usage, multi-step reasoning, and providing helpful responses.",
+            user_message=meta_prompt
         )
-
-        enhanced_prompt = response.choices[0].message.content.strip()
 
         # Basic validation
         if not enhanced_prompt or len(enhanced_prompt) < 50:
@@ -139,14 +142,118 @@ Enhanced prompt:"""
 
         return enhanced_prompt
 
-    except openai.APIError as e:
-        raise Exception(f"OpenAI API error: {str(e)}")
-    except openai.RateLimitError:
-        raise Exception("OpenAI API rate limit exceeded. Please try again in a moment.")
-    except openai.AuthenticationError:
-        raise Exception("OpenAI API authentication failed. Please check your OPENAI_API_KEY.")
     except Exception as e:
-        raise Exception(f"Failed to enhance prompt: {str(e)}")
+        raise Exception(f"Failed to enhance prompt with {llm_provider}: {str(e)}")
+
+
+def _call_llm_provider(
+    provider: str,
+    model: str,
+    api_key: str,
+    system_message: str,
+    user_message: str
+) -> str:
+    """
+    Call the appropriate LLM provider API.
+
+    Args:
+        provider: LLM provider name
+        model: Model identifier
+        api_key: API key for the provider
+        system_message: System prompt for the LLM
+        user_message: User message/prompt
+
+    Returns:
+        Generated text response
+    """
+    if provider == "openrouter":
+        # OpenRouter uses OpenAI-compatible API
+        # Free models require HTTP-Referer and X-Title headers for data policy
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/langchain-agent-builder",
+                "X-Title": "LangChain Agent Builder"
+            }
+        )
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.7,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+
+    elif provider == "openai":
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.7,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+
+    elif provider == "anthropic":
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=model,
+            max_tokens=2000,
+            system=system_message,
+            messages=[
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.content[0].text.strip()
+
+    elif provider == "google":
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        gen_model = genai.GenerativeModel(
+            model_name=model,
+            system_instruction=system_message
+        )
+        response = gen_model.generate_content(user_message)
+        return response.text.strip()
+
+    elif provider == "groq":
+        # Groq uses OpenAI-compatible API
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.7,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+
+    else:
+        # Fallback: try OpenAI-compatible API
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.7,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content.strip()
 
 
 def estimate_enhancement_cost(

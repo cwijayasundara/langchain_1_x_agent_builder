@@ -87,6 +87,26 @@ class AgentFactory:
         llm_config = config.llm
 
         try:
+            # Special handling for OpenRouter - uses OpenAI-compatible API
+            if llm_config.provider == "openrouter":
+                from langchain_openai import ChatOpenAI
+
+                api_key = llm_config.api_key or os.getenv("OPENROUTER_API_KEY")
+                if not api_key:
+                    raise AgentFactoryError("OpenRouter API key not provided. Set OPENROUTER_API_KEY environment variable or provide api_key in config.")
+
+                return ChatOpenAI(
+                    model=llm_config.model,  # e.g., "openai/gpt-4o", "anthropic/claude-3.5-sonnet"
+                    openai_api_key=api_key,
+                    openai_api_base="https://openrouter.ai/api/v1",
+                    temperature=llm_config.temperature,
+                    max_tokens=llm_config.max_tokens,
+                    default_headers={
+                        "HTTP-Referer": "https://langchain-agent-builder.local",
+                        "X-Title": "LangChain Agent Builder"
+                    }
+                )
+
             from langchain.chat_models import init_chat_model
 
             # Build model parameters
@@ -582,12 +602,15 @@ class AgentFactory:
                     # Doesn't exist - add it at position 0
                     max_tools = min(8, max(5, total_tools // 3))
 
+                    # Derive middleware model from agent's LLM config
+                    middleware_model = f"{config.llm.provider}:{config.llm.model}"
+
                     # Create llm_tool_selector config
                     from agent_api.models.config_schema import MiddlewareConfig
                     selector_config = MiddlewareConfig(
                         type="llm_tool_selector",
                         params={
-                            "model": "openai:gpt-4o-mini",
+                            "model": middleware_model,
                             "max_tools": max_tools,
                             "always_include": []
                         },
@@ -598,7 +621,7 @@ class AgentFactory:
                     config.middleware.insert(0, selector_config)
                     logger.info(
                         f"Auto-enabled llm_tool_selector middleware: "
-                        f"{total_tools} tools detected → max_tools={max_tools}"
+                        f"{total_tools} tools detected → max_tools={max_tools}, model={middleware_model}"
                     )
 
                 elif selector_index != 0:

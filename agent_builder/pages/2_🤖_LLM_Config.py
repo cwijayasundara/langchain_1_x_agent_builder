@@ -66,6 +66,10 @@ with col1:
             key="model_select"
         )
 
+    # Show OpenRouter info when selected
+    if provider == "openrouter":
+        st.info("OpenRouter provides access to 100+ models from OpenAI, Anthropic, Google, Meta, Mistral, and more through a single API key. Get your key at https://openrouter.ai/keys")
+
     st.markdown("---")
 
     # Configuration Form (for parameters only)
@@ -167,21 +171,25 @@ with col2:
     st.markdown("### 💡 Model Recommendations")
 
     st.info("""
-    **OpenAI**
-    • gpt-4o: Best for complex reasoning (128K context)
-    • gpt-4o-mini: Fast & cost-effective (128K context)
-    • o3-mini: Enhanced reasoning capabilities
+    **OpenAI** (Direct or via OpenRouter)
+    • gpt-5.1: Latest flagship (400K context)
+    • gpt-5-pro: Enhanced capabilities (400K context)
+    • o3-deep-research: Advanced reasoning (200K context)
 
     **Anthropic**
-    • claude-sonnet-4-5: Best for agents & coding (200K-1M context)
-    • claude-haiku-4-5: Fastest with frontier intelligence
-    • claude-opus-4-1: Exceptional specialized reasoning
+    • claude-sonnet-4.5: Best for agents & coding (1M context)
+    • claude-opus-4.5: Exceptional reasoning (200K context)
+    • claude-haiku-4.5: Fastest (200K context)
 
     **Google Gemini**
-    • gemini-2.5-pro: State-of-the-art reasoning (1M+ context)
-    • gemini-2.5-flash: Best price-performance (1M+ context)
+    • gemini-3-pro-preview: Next-gen reasoning (1M context)
+    • gemini-2.5-flash: Best price-performance (1M context)
 
-    **Groq**
-    • llama-3.3-70b-versatile: 280 tokens/sec, excellent quality
-    • groq/compound: Agentic system with built-in tools
+    **Open Source via OpenRouter**
+    • kimi-k2-thinking: Beats GPT-5, 256K context
+    • qwen3-max: Flagship Qwen (256K context)
+    • deepseek-v3.2-exp: Latest DeepSeek (164K context)
+    • grok-4-fast: xAI flagship (2M context)
     """)
+
+    st.caption("💡 OpenRouter provides unified access to 100+ models")

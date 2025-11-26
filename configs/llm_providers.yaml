@@ -11,8 +11,8 @@
 #
 # Changes to this file require app restart
 
-version: "1.0"
-last_updated: "2025-11-17"
+version: "1.1"
+last_updated: "2025-11-26"
 description: "LLM provider and model configurations for the Agent Builder"
 
 providers:
@@ -154,4 +154,171 @@ providers:
       - id: "openai/gpt-oss-20b"
         description: "OpenAI on Groq infrastructure"
         throughput: "1000 tokens/sec"
+        recommended: false
+
+  # OpenRouter - Unified API for 100+ models
+  # Documentation: https://openrouter.ai/docs
+  # Updated: 2025-11-26 with latest models
+  openrouter:
+    name: "OpenRouter (100+ models)"
+    env_key: "OPENROUTER_API_KEY"
+    description: "Unified API for multiple LLM providers"
+    models:
+      # ===== LATEST OPENAI MODELS =====
+      - id: "openai/gpt-5.1"
+        description: "GPT-5.1 - Latest flagship, 400K context"
+        context_window: 400000
+        recommended: true
+
+      - id: "openai/gpt-5-pro"
+        description: "GPT-5 Pro - Enhanced capabilities, 400K context"
+        context_window: 400000
+        recommended: false
+
+      - id: "openai/gpt-5.1-codex"
+        description: "GPT-5.1 Codex - Optimized for code, 400K context"
+        context_window: 400000
+        recommended: false
+
+      - id: "openai/o3-deep-research"
+        description: "o3 Deep Research - Advanced reasoning, 200K context"
+        context_window: 200000
+        recommended: false
+
+      - id: "openai/gpt-4o"
+        description: "GPT-4o - Proven multimodal, 128K context"
+        context_window: 128000
+        recommended: false
+
+      - id: "openai/gpt-4o-mini"
+        description: "GPT-4o Mini - Fast & cost-effective"
+        context_window: 128000
+        recommended: false
+
+      # ===== LATEST ANTHROPIC MODELS =====
+      - id: "anthropic/claude-sonnet-4.5"
+        description: "Claude Sonnet 4.5 - Best for agents/coding, 1M context"
+        context_window: 1000000
+        recommended: true
+
+      - id: "anthropic/claude-opus-4.5"
+        description: "Claude Opus 4.5 - Exceptional reasoning, 200K context"
+        context_window: 200000
+        recommended: false
+
+      - id: "anthropic/claude-haiku-4.5"
+        description: "Claude Haiku 4.5 - Fastest, 200K context"
+        context_window: 200000
+        recommended: false
+
+      # ===== LATEST GOOGLE MODELS =====
+      - id: "google/gemini-3-pro-preview"
+        description: "Gemini 3 Pro Preview - Next-gen reasoning, 1M context"
+        context_window: 1048576
+        recommended: true
+
+      - id: "google/gemini-2.5-flash-preview-09-2025"
+        description: "Gemini 2.5 Flash Preview - Fast & capable, 1M context"
+        context_window: 1048576
+        recommended: false
+
+      - id: "google/gemini-2.5-flash-lite-preview-09-2025"
+        description: "Gemini 2.5 Flash Lite - Ultra-fast, 1M context"
+        context_window: 1048576
+        recommended: false
+
+      # ===== xAI GROK MODELS =====
+      - id: "x-ai/grok-4-fast"
+        description: "Grok 4 Fast - xAI flagship, 2M context"
+        context_window: 2000000
+        recommended: false
+
+      - id: "x-ai/grok-4.1-fast:free"
+        description: "Grok 4.1 Fast (Free) - 2M context"
+        context_window: 2000000
+        recommended: false
+
+      # ===== MOONSHOT KIMI MODELS =====
+      - id: "moonshotai/kimi-k2-thinking"
+        description: "Kimi K2 Thinking - Open-source, beats GPT-5, 256K context"
+        context_window: 256000
+        recommended: true
+
+      - id: "moonshotai/kimi-k2"
+        description: "Kimi K2 - Trillion-param MoE, 256K context"
+        context_window: 256000
+        recommended: false
+
+      - id: "moonshotai/kimi-k2:free"
+        description: "Kimi K2 (Free) - Free tier access"
+        context_window: 256000
+        recommended: false
+
+      # ===== LATEST DEEPSEEK MODELS =====
+      - id: "deepseek/deepseek-v3.2-exp"
+        description: "DeepSeek V3.2 Exp - Latest experimental, 164K context"
+        context_window: 163840
+        recommended: false
+
+      - id: "deepseek/deepseek-v3.1-terminus"
+        description: "DeepSeek V3.1 Terminus - Production-ready, 131K context"
+        context_window: 131072
+        recommended: false
+
+      - id: "deepseek/deepseek-chat"
+        description: "DeepSeek Chat - General purpose"
+        context_window: 64000
+        recommended: false
+
+      - id: "deepseek/deepseek-coder"
+        description: "DeepSeek Coder - Optimized for code"
+        context_window: 64000
+        recommended: false
+
+      # ===== LATEST QWEN MODELS =====
+      - id: "qwen/qwen3-max"
+        description: "Qwen3 Max - Flagship, 256K context"
+        context_window: 256000
+        recommended: false
+
+      - id: "qwen/qwen3-coder-plus"
+        description: "Qwen3 Coder Plus - Best for coding, 128K context"
+        context_window: 128000
+        recommended: false
+
+      - id: "qwen/qwen3-next-80b-a3b-instruct"
+        description: "Qwen3 Next 80B - Advanced instruct, 262K context"
+        context_window: 262144
+        recommended: false
+
+      # ===== META LLAMA MODELS =====
+      - id: "meta-llama/llama-3.1-405b-instruct"
+        description: "Llama 3.1 405B Instruct - Largest open-source"
+        context_window: 131072
+        recommended: false
+
+      - id: "meta-llama/llama-3.1-70b-instruct"
+        description: "Llama 3.1 70B Instruct"
+        context_window: 131072
+        recommended: false
+
+      - id: "meta-llama/llama-3.1-8b-instruct"
+        description: "Llama 3.1 8B Instruct - Lightweight"
+        context_window: 131072
+        recommended: false
+
+      # ===== MISTRAL MODELS =====
+      - id: "mistralai/voxtral-small-24b-2507"
+        description: "Voxtral Small 24B - Latest Mistral"
+        context_window: 32000
+        recommended: false
+
+      - id: "mistralai/mistral-large"
+        description: "Mistral Large - Flagship"
+        context_window: 128000
+        recommended: false
+
+      - id: "mistralai/mixtral-8x22b-instruct"
+        description: "Mixtral 8x22B Instruct - MoE architecture"
+        context_window: 65536
         recommended: false

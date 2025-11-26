@@ -36,8 +36,21 @@ with col1:
 
     if preset != "None" and st.button("Load Preset"):
         preset_config = MIDDLEWARE_PRESETS[preset]
-        update_page_data(6, {'middleware': preset_config['middleware']})
-        st.success(f"✅ Loaded preset: {preset_config['name']}")
+
+        # Get user's selected LLM from page 2
+        llm_config = get_page_data(2)
+        user_model = f"{llm_config.get('provider', 'openai')}:{llm_config.get('model', 'gpt-4o-mini')}"
+
+        # Replace hardcoded model with user's selected LLM
+        middleware_list = []
+        for mw in preset_config['middleware']:
+            mw_copy = {'type': mw['type'], 'params': dict(mw['params']), 'enabled': mw['enabled']}
+            if 'model' in mw_copy['params']:
+                mw_copy['params']['model'] = user_model
+            middleware_list.append(mw_copy)
+
+        update_page_data(6, {'middleware': middleware_list})
+        st.success(f"✅ Loaded preset: {preset_config['name']} (using {user_model})")
         st.rerun()
 
     st.markdown("---")

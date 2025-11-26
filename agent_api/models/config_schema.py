@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class LLMConfig(BaseModel):
     """LLM provider and model configuration."""
-    provider: Literal["openai", "anthropic", "google", "groq"] = Field(
+    provider: Literal["openai", "anthropic", "google", "groq", "openrouter"] = Field(
         description="LLM provider to use"
     )
     model: str = Field(
