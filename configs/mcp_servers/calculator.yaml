@@ -1,0 +1,7 @@
+name: calculator
+version: 1.0.0
+description: Mathematical operations via MCP
+transport: streamable_http
+url: http://localhost:8005/mcp
+stateful: false
+tags: []

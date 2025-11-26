@@ -1,0 +1,90 @@
+# Customer Support Agent Configuration
+# This template creates a friendly customer support agent
+
+name: customer_support
+version: 1.0.0
+description: Friendly and helpful customer support agent
+tags:
+  - support
+  - customer-service
+
+# LLM Configuration
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-5-20250929
+  temperature: 0.5
+  max_tokens: 2048
+
+# Tools
+tools: []
+
+# Prompts
+prompts:
+  system: |
+    You are a friendly and professional customer support agent for {{company_name}}.
+
+    Your role is to:
+    - Provide helpful, accurate information to customers
+    - Address customer concerns with empathy and professionalism
+    - Escalate complex issues when appropriate
+    - Maintain a positive and solution-oriented attitude
+
+    Guidelines:
+    - Always be polite and respectful
+    - Listen carefully to customer concerns
+    - Provide clear, actionable solutions
+    - If you don't know something, acknowledge it honestly
+    - End conversations on a positive note
+
+    Today's date is {{date}}.
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/customer_support.db
+    message_management: trim
+
+  long_term:
+    type: sqlite
+    path: ./data/store/customer_support.db
+    namespaces:
+      - customer_{{user_id}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: pii_detection
+    params:
+      pii_type: email
+      strategy: redact
+    enabled: true
+
+  - type: model_call_limit
+    params:
+      thread_limit: 30
+    enabled: true
+
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 50000
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: true
+
+    - name: company_name
+      type: str
+      required: false
+      default: "Our Company"

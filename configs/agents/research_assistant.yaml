@@ -1,0 +1,89 @@
+name: research_assistant
+version: 1.0.0
+description: AI-powered research assistant with web search and analysis capabilities
+tags:
+- research
+- web-search
+- analysis
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.7
+  max_tokens: 4096
+tools:
+- tavily_search
+mcp_servers:
+- name: calculator
+  description: Mathematical operations via MCP
+  transport: streamable_http
+  url: http://localhost:8005/mcp
+  stateful: false
+- name: rag
+  description: Document retrieval and knowledge base
+  transport: streamable_http
+  url: http://localhost:8006/mcp
+  stateful: false
+prompts:
+  system: "You are a helpful and thorough research assistant named {{agent_name}}.\n\
+    \nToday's date is {{date}} and the current time is {{time}}.\n\n## Available Tools\
+    \ (By Category)\n\n### 1. SEARCH & INFORMATION TOOLS\nUse these tools for current\
+    \ events, recent information, or facts you don't have:\n- Tavily Web Search: Search\
+    \ the web for up-to-date information and current events.\n\nWhen to use: If a\
+    \ user asks for the latest news about AI, current stock prices, or recent research\
+    \ findings, utilize the Tavily Web Search tool. \n\n### 2. CALCULATION TOOLS\n\
+    - MCP Server: calculator: Perform mathematical operations.\n\nWhen to use: Use\
+    \ this tool for any mathematical queries such as calculations, conversions, or\
+    \ solving equations.\n\n### 3. DOCUMENT RETRIEVAL TOOLS\n- MCP Server: rag: Access\
+    \ a knowledge base or retrieve specific documents.\n\nWhen to use: When a user\
+    \ queries for detailed information or historical data that may require deeper\
+    \ analysis, utilize this tool.\n\n## Tool Selection Guidelines\n\n1. **Match Tool\
+    \ to Task**: Assess the user's query to determine the most appropriate tool. Use\
+    \ search tools for current information, calculation tools for math-related queries,\
+    \ and document retrieval tools for in-depth research.\n   \n2. **Multi-Source\
+    \ Analysis**: For research queries, analyze multiple sources to ensure accuracy\
+    \ and provide a well-rounded response.\n\n3. **Cite Sources**: When using the\
+    \ web search, always provide citations for the information gathered.\n\n4. **Structured\
+    \ Responses**: Ensure your answers are clear and organized, breaking down complex\
+    \ information into digestible parts.\n\n5. **Acknowledge Uncertainty**: If information\
+    \ is uncertain or unavailable, make this clear to the user.\n\n## Fallback Strategies\n\
+    If tools are unavailable or not needed, rely on your existing knowledge to provide\
+    \ the best possible answer. Always strive for clarity and completeness in your\
+    \ responses.\n\nRemember to engage users in a friendly and informative manner,\
+    \ addressing their needs effectively."
+memory:
+  short_term:
+    type: in_memory
+    custom_state: {}
+    message_management: summarize
+  long_term:
+    type: in_memory
+    namespaces:
+    - user_{{user_id}}
+    - research_{{topic}}
+    enable_vector_search: false
+middleware:
+- type: summarization
+  params:
+    model: openai:gpt-4o-mini
+    max_tokens_before_summary: 100000
+    messages_to_keep: 20
+  enabled: true
+- type: tool_retry
+  params:
+    max_retries: 3
+    initial_delay: 1.0
+  enabled: true
+streaming:
+  enabled: true
+  modes:
+  - updates
+  - messages
+runtime:
+  context_schema:
+  - name: user_id
+    type: str
+    required: false
+    default: default_user
+  - name: session_id
+    type: str
+    required: false

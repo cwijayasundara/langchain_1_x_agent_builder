@@ -1,0 +1,68 @@
+# Core LangChain - Bounded versions for stable operation
+langchain>=1.1.0,<1.2.0
+langchain-core>=1.1.0,<1.2.0
+langchain-community>=0.3.0,<0.5.0  # Allow 0.3.x for langchain-experimental compatibility
+langgraph>=1.0.4,<1.1.0  # Latest available version compatible with langchain 1.1.0
+
+# LLM Providers (Native) - Pinned to stable versions
+langchain-openai>=1.1.0,<1.2.0
+langchain-anthropic>=0.4.0
+langchain-google-genai>=3.0.0
+langchain-groq>=0.3.0
+
+# Tools & Integrations
+tavily-python>=0.5.0,<0.6.0
+langchain-tavily>=0.2.13,<0.3.0
+langchain-mcp-adapters>=0.1.0,<0.2.0
+mcp>=1.0.0,<2.0.0  # Model Context Protocol for creating MCP servers
+langchain-experimental>=0.3.0  # May require langchain-community<0.4.0
+
+# API Framework - Stable versions
+fastapi>=0.115.0,<0.116.0
+uvicorn[standard]>=0.32.0,<0.33.0
+python-multipart>=0.0.9,<0.1.0
+websockets>=14.0,<15.0
+
+# UI Framework - Latest stable
+streamlit>=1.41.1,<2.0.0
+
+# Memory & Storage - Pinned for stability
+langgraph-checkpoint-sqlite>=2.0.4,<3.0.0
+chromadb>=1.3.0,<2.0.0
+
+# RAG Components
+sentence-transformers>=2.0.0,<3.0.0
+pypdf>=3.0.0,<5.0.0
+
+# Testing
+agentevals>=0.0.1,<0.1.0
+pytest>=8.0.0,<9.0.0
+pytest-asyncio>=0.23.0,<0.24.0
+pytest-recording>=0.13.0,<0.14.0
+pytest-cov>=4.0.0,<5.0.0
+
+# Data Validation - Pydantic v2 for compatibility
+pydantic>=2.10.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+
+# Utilities - Upper bounds added
+pyyaml>=6.0.0,<7.0.0
+python-dotenv>=1.0.0,<2.0.0
+httpx>=0.27.0,<0.28.0
+aiofiles>=23.0.0,<24.0.0
+
+# HTTP/Async - Key compatibility constraints
+aiohttp>=3.10.0,<4.0.0
+yarl>=1.17.0,<2.0.0
+
+# OpenAI SDK - Compatible with langchain-openai
+openai>=1.109.1,<3.0.0
+
+# Code Generation & Execution
+black>=24.0.0,<25.0.0
+isort>=5.0.0,<6.0.0
+
+# Monitoring (Optional) - Compatible with langchain-core 1.0.x
+langsmith>=0.3.45,<1.0.0
+wikipedia
+mcp>=1.0.0

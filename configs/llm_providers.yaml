@@ -1,0 +1,157 @@
+# LLM Provider Configuration
+# This file defines available LLM providers and their models
+#
+# To add a new provider:
+#   1. Add a new provider key under 'providers'
+#   2. Specify name, env_key, and models list
+#
+# To add a new model:
+#   1. Add a new entry under the provider's models list
+#   2. Include id (required) and optional metadata
+#
+# Changes to this file require app restart
+
+version: "1.0"
+last_updated: "2025-11-17"
+description: "LLM provider and model configurations for the Agent Builder"
+
+providers:
+  # OpenAI Models
+  # Documentation: https://platform.openai.com/docs/models
+  openai:
+    name: "OpenAI"
+    env_key: "OPENAI_API_KEY"
+    models:
+      - id: "gpt-4o"
+        description: "Best for complex reasoning, 128K context"
+        context_window: 128000
+        recommended: true
+
+      - id: "gpt-4o-mini"
+        description: "Faster, cheaper, 128K context"
+        context_window: 128000
+        recommended: false
+
+      - id: "gpt-4.1"
+        description: "1M context limit (Azure)"
+        context_window: 1000000
+        recommended: false
+
+      - id: "gpt-4-turbo"
+        description: "128K context, cost-effective"
+        context_window: 128000
+        recommended: false
+
+      - id: "o3-mini"
+        description: "Latest reasoning model"
+        context_window: 128000
+        recommended: false
+
+      - id: "gpt-3.5-turbo"
+        description: "Legacy, cost-effective"
+        context_window: 16385
+        recommended: false
+
+  # Anthropic Claude Models
+  # Documentation: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  anthropic:
+    name: "Anthropic"
+    env_key: "ANTHROPIC_API_KEY"
+    models:
+      - id: "claude-sonnet-4-5-20250929"
+        description: "Best for agents/coding"
+        context_window: 200000
+        max_output: 64000
+        recommended: true
+
+      - id: "claude-haiku-4-5-20251001"
+        description: "Fastest"
+        context_window: 200000
+        max_output: 64000
+        recommended: false
+
+      - id: "claude-opus-4-1-20250805"
+        description: "Exceptional reasoning"
+        context_window: 200000
+        max_output: 32000
+        recommended: false
+
+      - id: "claude-sonnet-4-5"
+        description: "Alias for latest Sonnet"
+        context_window: 200000
+        recommended: false
+
+      - id: "claude-haiku-4-5"
+        description: "Alias for latest Haiku"
+        context_window: 200000
+        recommended: false
+
+      - id: "claude-opus-4-1"
+        description: "Alias for latest Opus"
+        context_window: 200000
+        recommended: false
+
+  # Google Gemini Models
+  # Documentation: https://ai.google.dev/gemini-api/docs/models
+  google:
+    name: "Google"
+    env_key: "GOOGLE_API_KEY"
+    models:
+      - id: "gemini-2.5-pro"
+        description: "State-of-the-art reasoning, 1M+ context"
+        context_window: 1000000
+        recommended: true
+
+      - id: "gemini-2.5-flash"
+        description: "Best price-performance, 1M+ context"
+        context_window: 1000000
+        recommended: false
+
+      - id: "gemini-2.5-flash-lite"
+        description: "Fastest, cost-efficient, 1M+ context"
+        context_window: 1000000
+        recommended: false
+
+      - id: "gemini-2.0-flash"
+        description: "Previous generation"
+        context_window: 1000000
+        recommended: false
+
+      - id: "gemini-2.0-flash-lite"
+        description: "Previous generation lite"
+        context_window: 1000000
+        recommended: false
+
+  # Groq Models
+  # Documentation: https://console.groq.com/docs/models
+  groq:
+    name: "Groq"
+    env_key: "GROQ_API_KEY"
+    models:
+      - id: "llama-3.3-70b-versatile"
+        description: "280 T/sec, excellent performance"
+        throughput: "280 tokens/sec"
+        recommended: true
+
+      - id: "llama-3.1-8b-instant"
+        description: "560 T/sec, ultra-fast"
+        throughput: "560 tokens/sec"
+        recommended: false
+
+      - id: "groq/compound"
+        description: "Agentic system with tools"
+        recommended: false
+
+      - id: "groq/compound-mini"
+        description: "Lightweight agentic system"
+        recommended: false
+
+      - id: "openai/gpt-oss-120b"
+        description: "OpenAI on Groq infrastructure"
+        throughput: "500 tokens/sec"
+        recommended: false
+
+      - id: "openai/gpt-oss-20b"
+        description: "OpenAI on Groq infrastructure"
+        throughput: "1000 tokens/sec"
+        recommended: false

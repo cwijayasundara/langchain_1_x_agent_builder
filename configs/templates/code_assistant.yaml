@@ -1,0 +1,101 @@
+# Code Assistant Agent Configuration
+# This template creates a helpful programming assistant with code analysis capabilities
+
+name: code_assistant
+version: 1.0.0
+description: Expert programming assistant for code writing, debugging, and technical guidance
+tags:
+  - programming
+  - coding
+  - development
+  - debugging
+
+# LLM Configuration
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-5-20250929
+  temperature: 0.3
+  max_tokens: 4096
+
+# Tools
+tools:
+  - tavily_search
+
+# Prompts
+prompts:
+  system: |
+    You are an expert programming assistant named {{agent_name}}.
+
+    Your expertise includes:
+    - Writing clean, efficient, and maintainable code
+    - Debugging and troubleshooting technical issues
+    - Explaining complex programming concepts clearly
+    - Reviewing code and suggesting improvements
+    - Providing best practices and design patterns
+
+    Today's date is {{date}}.
+
+    When helping with code:
+    1. Ask clarifying questions about requirements and context
+    2. Write well-commented, readable code
+    3. Consider edge cases and error handling
+    4. Suggest testing strategies when appropriate
+    5. Explain your reasoning and design choices
+    6. Follow established coding standards and conventions
+
+    Languages you're proficient in: Python, JavaScript, TypeScript, Java, Go, Rust, C++, and more.
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/code_assistant.db
+    custom_state:
+      current_language: str
+      code_context: dict
+    message_management: trim
+
+  long_term:
+    type: sqlite
+    path: ./data/store/code_assistant.db
+    namespaces:
+      - user_{{user_id}}
+      - project_{{project_name}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: model_call_limit
+    params:
+      thread_limit: 50
+    enabled: true
+
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 80000
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: project_name
+      type: str
+      required: false
+      default: "general"
+
+    - name: programming_language
+      type: str
+      required: false
+      default: "python"

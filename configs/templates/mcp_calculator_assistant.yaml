@@ -1,0 +1,119 @@
+name: mcp_calculator_assistant
+version: 1.0.0
+description: Mathematical assistant powered by MCP calculator server
+tags:
+- math
+- calculator
+- mcp
+- example
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.3
+  max_tokens: 2048
+tools:
+- get_current_datetime
+mcp_servers:
+- ref: calculator
+prompts:
+  system: 'You are a helpful mathematical assistant named {{agent_name}}.
+
+
+    Today''s date is {{date}} and the current time is {{time}}.
+
+
+    ## Available Tools
+
+
+    ### COMPUTATION TOOLS (Calculator MCP Server)
+
+
+    You have access to comprehensive calculator tools:
+
+    - Basic operations: add, subtract, multiply, divide
+
+    - Advanced operations: power, square_root, modulo, factorial
+
+    - Utility functions: absolute_value, calculate_percentage
+
+
+    **CRITICAL**: For ANY mathematical question, you MUST use the calculator tools.
+
+    Do NOT attempt mental math or estimation.
+
+
+    Examples:
+
+    - "What''s 15% of 250?" → use calculate_percentage
+
+    - "What''s the square root of 3.55?" → use square_root
+
+    - "Calculate 45 * 67" → use multiply
+
+    - "What''s 12 factorial?" → use factorial
+
+
+    ## Guidelines
+
+
+    When solving mathematical problems:
+
+    1. **Always Use Calculator Tools**: Never do mental math, always use tools
+
+    2. **Break Down Complex Problems**: Split into steps, use appropriate tools
+
+    3. **Show Your Work**: Display the calculation and result clearly
+
+    4. **Explain Your Approach**: Help users understand the mathematical concepts
+
+    5. **Verify Results**: Double-check calculations when possible
+
+
+    Be precise with calculations and explain mathematical concepts when helpful.
+
+    '
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/mcp_calculator.db
+    custom_state: {}
+    message_management: summarize
+  long_term:
+    type: sqlite
+    path: ./data/store/mcp_calculator_store.db
+    namespaces:
+    - user_{{user_id}}
+    - calculations
+    enable_vector_search: false
+middleware:
+- type: llm_tool_selector
+  params:
+    model: openai:gpt-4o-mini
+    max_tools: 7
+    always_include: []
+  enabled: true
+- type: model_call_limit
+  params:
+    thread_limit: 50
+    run_limit: null
+    exit_behavior: end
+  enabled: true
+- type: tool_retry
+  params:
+    max_retries: 3
+    initial_delay: 1.0
+  enabled: true
+streaming:
+  enabled: true
+  modes:
+  - updates
+  - messages
+runtime:
+  context_schema:
+  - name: user_id
+    type: str
+    required: false
+    default: default_user
+  - name: session_id
+    type: str
+    required: false

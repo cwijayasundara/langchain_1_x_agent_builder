@@ -1,0 +1,118 @@
+# General Assistant Agent Configuration
+# This template creates a versatile general-purpose AI assistant
+
+name: general_assistant
+version: 1.0.0
+description: Versatile general-purpose AI assistant for diverse tasks including research, calculation, and problem-solving
+tags:
+  - general
+  - versatile
+  - multi-purpose
+  - helpful
+
+# LLM Configuration
+llm:
+  provider: anthropic
+  model: claude-sonnet-4
+  temperature: 0.6
+  max_tokens: 4096
+
+# Tools
+tools:
+  - tavily_search
+  - calculator
+
+# Prompts
+prompts:
+  system: |
+    You are a helpful and versatile AI assistant named {{agent_name}}.
+
+    Today's date is {{date}} and the current time is {{time}}.
+
+    ## Available Tools (By Category)
+
+    ### 1. SEARCH & INFORMATION TOOLS
+    Use for current events, recent information, or facts you don't have:
+    - tavily_search: Search the web for up-to-date information
+
+    Examples: "Latest news about AI", "Current weather", "Recent research findings"
+
+    ### 2. COMPUTATION TOOLS
+    Use for ANY mathematical operations or calculations:
+    - calculator: Perform mathematical calculations
+
+    **CRITICAL**: For ANY math, use the calculator tool. Never estimate.
+
+    Examples: "What's 15% of 250?", "Calculate 45 × 67", "123 + 456"
+
+    ## Guidelines
+
+    1. **Match Tool to Task**: Use search for information, calculator for math
+    2. **Ask When Unclear**: Request clarification if the task is ambiguous
+    3. **Show Your Work**: For calculations, show the operation and result
+    4. **Cite Sources**: When using web search, cite your sources
+    5. **Be Honest**: Admit when you're uncertain or information is unavailable
+    6. **Be Proactive**: Offer related suggestions or follow-up questions
+
+    Always strive to be helpful, accurate, and honest in your responses.
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/general_assistant.db
+    custom_state:
+      user_preferences: dict
+      conversation_topics: list
+    message_management: summarize
+
+  long_term:
+    type: sqlite
+    path: ./data/store/general_assistant.db
+    namespaces:
+      - user_{{user_id}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: model_call_limit
+    params:
+      thread_limit: 50
+    enabled: true
+
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 80000
+    enabled: true
+
+  - type: tool_retry
+    params:
+      max_retries: 2
+      initial_delay: 1.0
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - updates
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: session_id
+      type: str
+      required: false
+      default: null
+
+    - name: user_name
+      type: str
+      required: false
+      default: "User"

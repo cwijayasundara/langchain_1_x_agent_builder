@@ -1,0 +1,112 @@
+# Data Analyst Agent Configuration
+# This template creates a data analysis assistant with calculation and research capabilities
+
+name: data_analyst
+version: 1.0.0
+description: Expert data analyst for statistical analysis, insights, and data-driven decision making
+tags:
+  - data
+  - analytics
+  - statistics
+  - insights
+
+# LLM Configuration
+llm:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.4
+  max_tokens: 4096
+
+# Tools
+tools:
+  - calculator
+  - tavily_search
+
+# Prompts
+prompts:
+  system: |
+    You are an expert data analyst named {{agent_name}}.
+
+    Your expertise includes:
+    - Statistical analysis and hypothesis testing
+    - Data interpretation and insights generation
+    - Trend analysis and pattern recognition
+    - Creating data-driven recommendations
+    - Explaining complex data concepts in simple terms
+
+    Today's date is {{date}}.
+
+    When analyzing data:
+    1. Ask clarifying questions about the data and objectives
+    2. Perform thorough statistical analysis
+    3. Look for patterns, trends, and anomalies
+    4. Provide clear, actionable insights
+    5. Explain your methodology and reasoning
+    6. Use visualizations concepts when describing findings
+    7. Consider limitations and confidence levels
+
+    You have access to:
+    - Calculator for numerical computations
+    - Web search for finding additional context and benchmarks
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/data_analyst.db
+    custom_state:
+      current_dataset: str
+      analysis_context: dict
+    message_management: summarize
+
+  long_term:
+    type: sqlite
+    path: ./data/store/data_analyst.db
+    namespaces:
+      - user_{{user_id}}
+      - dataset_{{dataset_name}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: model_call_limit
+    params:
+      thread_limit: 60
+    enabled: true
+
+  - type: tool_retry
+    params:
+      max_retries: 3
+      initial_delay: 1.0
+    enabled: true
+
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 90000
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - updates
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: dataset_name
+      type: str
+      required: false
+      default: "general_analysis"
+
+    - name: analysis_type
+      type: str
+      required: false
+      default: "exploratory"

@@ -1,0 +1,114 @@
+name: mcp_rag_assistant
+version: 1.0.0
+description: Knowledge assistant with RAG capabilities via MCP server
+tags:
+  - rag
+  - retrieval
+  - mcp
+  - knowledge
+  - search
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-5-20250929
+  temperature: 0.5
+  max_tokens: 4096
+
+prompts:
+  system: |
+    You are a knowledgeable research assistant named {{agent_name}}.
+
+    Today's date is {{date}}.
+
+    You have access to a RAG (Retrieval-Augmented Generation) system via MCP server that provides:
+    - Document search and retrieval
+    - Semantic search capabilities
+    - Category-based filtering
+    - Document summarization
+
+    Available RAG tools:
+    - search_documents: Search for relevant documents
+    - retrieve_context: Get formatted context for a query
+    - get_relevant_chunks: Extract specific text chunks
+    - list_document_categories: See available categories
+    - get_document_by_id: Retrieve specific documents
+    - get_documents_by_tag: Find documents by tag
+    - summarize_documents: Get summaries of search results
+
+    When answering questions:
+    1. Use search_documents or retrieve_context to find relevant information
+    2. Cite the retrieved context in your answers
+    3. Combine information from multiple sources when helpful
+    4. Acknowledge when information isn't available in the knowledge base
+    5. Use web search for current events or information not in the document database
+
+    You also have web search capabilities for current information.
+
+    Be helpful, accurate, and cite your sources clearly.
+
+tools:
+  - tavily_search
+  - get_current_datetime
+
+mcp_servers:
+  - name: rag
+    description: Document retrieval and knowledge base
+    transport: streamable_http
+    url: http://localhost:8006/mcp
+    stateful: false
+
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/mcp_rag.db
+    custom_state: {}
+    message_management: summarize
+  long_term:
+    type: sqlite
+    path: ./data/store/mcp_rag_store.db
+    namespaces:
+      - user_{{user_id}}
+      - research_{{session_id}}
+      - knowledge
+    enable_vector_search: false
+
+middleware:
+  - type: summarization
+    params:
+      model: openai:gpt-4o-mini
+      max_tokens_before_summary: 100000
+      messages_to_keep: 20
+    enabled: true
+  - type: model_call_limit
+    params:
+      thread_limit: 50
+      run_limit: null
+      exit_behavior: end
+    enabled: true
+  - type: tool_retry
+    params:
+      max_retries: 3
+      initial_delay: 1.0
+    enabled: true
+  - type: llm_tool_selector
+    params:
+      model: gpt-4o-mini
+      max_tools: null
+    enabled: false
+
+streaming:
+  enabled: true
+  modes:
+    - updates
+    - messages
+
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: default_user
+    - name: session_id
+      type: str
+      required: false
+      default: default_session

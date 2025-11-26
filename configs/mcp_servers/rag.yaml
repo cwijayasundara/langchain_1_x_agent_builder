@@ -1,0 +1,7 @@
+name: rag
+version: 1.0.0
+description: Document retrieval and knowledge base
+transport: streamable_http
+url: http://localhost:8006/mcp
+stateful: false
+tags: []

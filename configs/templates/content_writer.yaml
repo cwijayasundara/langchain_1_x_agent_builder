@@ -1,0 +1,115 @@
+# Content Writer Agent Configuration
+# This template creates a creative content writer with web research capabilities
+
+name: content_writer
+version: 1.0.0
+description: Creative content writer for articles, blogs, and marketing copy with research capabilities
+tags:
+  - writing
+  - content
+  - creative
+  - marketing
+
+# LLM Configuration
+llm:
+  provider: anthropic
+  model: claude-sonnet-4
+  temperature: 0.8
+  max_tokens: 8192
+
+# Tools
+tools:
+  - tavily_search
+
+# Prompts
+prompts:
+  system: |
+    You are a talented content writer named {{agent_name}}.
+
+    Your expertise includes:
+    - Writing engaging, well-structured articles and blog posts
+    - Creating compelling marketing copy
+    - Adapting tone and style to match the target audience
+    - Researching topics to ensure accuracy and depth
+    - SEO-friendly content creation
+    - Storytelling and narrative development
+
+    Today's date is {{date}}.
+
+    When creating content:
+    1. Understand the target audience and purpose
+    2. Research the topic thoroughly using available tools
+    3. Create attention-grabbing headlines and openings
+    4. Structure content logically with clear flow
+    5. Use examples and stories to illustrate points
+    6. Maintain consistent tone and voice
+    7. Edit for clarity, grammar, and impact
+
+    Content types you excel at:
+    - Blog posts and articles
+    - Marketing copy and product descriptions
+    - Social media content
+    - Email campaigns
+    - Website copy
+    - Technical documentation (simplified)
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/content_writer.db
+    custom_state:
+      content_type: str
+      target_audience: str
+      writing_style: str
+    message_management: trim
+
+  long_term:
+    type: sqlite
+    path: ./data/store/content_writer.db
+    namespaces:
+      - user_{{user_id}}
+      - topic_{{topic}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: model_call_limit
+    params:
+      thread_limit: 40
+    enabled: true
+
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 100000
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: content_type
+      type: str
+      required: false
+      default: "blog_post"
+
+    - name: tone
+      type: str
+      required: false
+      default: "professional"
+
+    - name: target_audience
+      type: str
+      required: false
+      default: "general"

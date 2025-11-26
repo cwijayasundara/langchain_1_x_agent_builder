@@ -1,0 +1,229 @@
+# Multi-Tool Assistant Agent Configuration
+# This template showcases best practices for agents with many tools (5+)
+# Demonstrates tool categorization, intelligent selection, and optimized prompting
+
+name: multi_tool_assistant
+version: 1.0.0
+description: Advanced assistant with multiple tools - demonstrates tool selection optimization best practices
+tags:
+  - multi-tool
+  - optimized
+  - research
+  - computation
+  - analysis
+  - best-practices
+
+# LLM Configuration
+llm:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.7
+  max_tokens: 4096
+
+# Built-in Tools
+tools:
+  - tavily_search
+  - calculator
+  - python_repl
+
+# MCP Servers (example configuration)
+# Uncomment and configure MCP servers to add more tools
+# mcp_servers:
+#   - name: calculator
+#     description: Mathematical operations via MCP
+#     transport: streamable_http
+#     url: http://localhost:8005/mcp
+#     stateful: false
+#
+#   - name: rag
+#     description: Document retrieval and knowledge base
+#     transport: streamable_http
+#     url: http://localhost:8006/mcp
+#     stateful: false
+
+# Prompts - Demonstrates best practices for multi-tool agents
+prompts:
+  system: |
+    You are an advanced multi-purpose assistant named {{agent_name}}.
+
+    Today's date is {{date}} and the current time is {{time}}.
+
+    ## Available Tools (By Category)
+
+    ### 1. COMPUTATION TOOLS
+    Use these for ANY mathematical operations, calculations, or numerical analysis:
+    - calculator: Safe mathematical calculations (add, subtract, multiply, divide, etc.)
+
+    **CRITICAL**: For ANY question involving numbers, calculations, percentages, or math,
+    you MUST use the calculator tools. Do NOT attempt mental math or estimation.
+
+    Examples requiring computation tools:
+    - "What is 15% of 250?" → use calculator
+    - "Calculate 45 * 67" → use calculator
+    - "If I have $1000 and spend $234.56, how much is left?" → use calculator
+
+    ### 2. CODE EXECUTION TOOLS
+    Use these for executing Python code and complex data analysis:
+    - python_repl: Execute Python code in a sandboxed environment
+
+    Examples requiring code execution:
+    - "Run this Python script..."
+    - "Analyze this dataset..."
+    - "Create a visualization of..."
+
+    ### 3. SEARCH & INFORMATION TOOLS
+    Use these for current events, recent information, or facts you don't have:
+    - tavily_search: Search the web for up-to-date information
+
+    Examples requiring search tools:
+    - "What's the latest news about AI?"
+    - "Current stock price of Apple"
+    - "Recent research on climate change"
+
+    ## Tool Selection Decision Tree
+
+    1. Does the query involve ANY calculations or numbers? → Use COMPUTATION tools
+    2. Does it need code execution or data analysis? → Use CODE EXECUTION tools
+    3. Does it ask about current events or recent information? → Use SEARCH tools
+    4. Multiple capabilities needed? → Use multiple tool categories in sequence
+
+    ## Guidelines
+
+    1. **Always Use the Right Tool**: Match the query type to the appropriate tool category
+    2. **Show Your Work**: For calculations and code, show the operation and result clearly
+    3. **Cite Sources**: When using web search, cite your sources
+    4. **Multi-Step Reasoning**: Break complex tasks into steps, using appropriate tools for each
+    5. **Verify Results**: Double-check calculations and validate information from multiple sources
+    6. **Acknowledge Uncertainty**: If information is uncertain or unavailable, say so clearly
+
+    If a tool is unavailable, use your existing knowledge to provide the best possible answer.
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/multi_tool_assistant.db
+    custom_state:
+      user_preferences: dict
+      recent_calculations: list
+      research_topics: list
+    message_management: summarize
+
+  long_term:
+    type: sqlite
+    path: ./data/store/multi_tool_assistant.db
+    namespaces:
+      - user_{{user_id}}
+      - session_{{session_id}}
+    enable_vector_search: false
+
+# Middleware - CRITICAL for multi-tool agents
+# This preset is optimized for agents with 5+ tools
+middleware:
+  # Tool selection middleware - MUST be first
+  - type: llm_tool_selector
+    params:
+      model: openai:gpt-4o-mini  # Fast, cheap model for tool selection
+      max_tools: 7                # Limit to ~7 most relevant tools (from potentially 18+)
+      always_include: []          # Tools to always include (e.g., ["calculator"])
+
+      # Optional: Custom instructions for tool selection
+      # Uncomment and customize if you need specific selection behavior
+      # system_prompt: |
+      #   You are selecting tools for a multi-purpose assistant.
+      #   Guidelines:
+      #   - Prioritize calculation tools for math queries
+      #   - Prioritize search tools for current events/information
+      #   - Prioritize document tools for knowledge retrieval
+      #   Only select tools that are clearly relevant to the user's query.
+    enabled: true
+
+  # Tool retry for reliability
+  - type: tool_retry
+    params:
+      max_retries: 3
+      initial_delay: 1.0
+    enabled: true
+
+  # Summarization to manage long conversations
+  - type: summarization
+    params:
+      model: openai:gpt-4o-mini
+      max_tokens_before_summary: 100000
+      messages_to_keep: 20
+    enabled: true
+
+  # Model call limit for safety
+  - type: model_call_limit
+    params:
+      thread_limit: 50
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - updates
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: session_id
+      type: str
+      required: false
+      default: null
+
+    - name: user_name
+      type: str
+      required: false
+      default: "User"
+
+# ==============================================================================
+# CONFIGURATION NOTES
+# ==============================================================================
+#
+# This template demonstrates BEST PRACTICES for multi-tool agents:
+#
+# 1. TOOL SELECTION OPTIMIZATION:
+#    - llm_tool_selector middleware is CRITICAL for agents with 5+ tools
+#    - Reduces token usage by 85-90% for tool definitions
+#    - Improves accuracy by reducing tool confusion
+#    - Uses cheap model (gpt-4o-mini) for selection, saving costs
+#
+# 2. PROMPT ENGINEERING:
+#    - Tools are categorized (Computation, Code Execution, Search)
+#    - Clear decision tree for tool selection
+#    - Concrete examples for each tool category
+#    - Critical rules emphasized (e.g., "MUST use calculator for math")
+#
+# 3. MIDDLEWARE ORDER:
+#    - llm_tool_selector MUST be first (filters tools before request)
+#    - tool_retry for reliability
+#    - summarization for long conversations
+#    - model_call_limit for safety
+#
+# 4. EXPECTED PERFORMANCE:
+#    - Before: 18 tools → ~4500 tokens per request
+#    - After: ~7 tools → ~1500 tokens per request (67% reduction)
+#    - Better accuracy, faster responses, lower costs
+#
+# 5. WHEN TO USE THIS TEMPLATE:
+#    - Agents with 5+ built-in tools
+#    - Agents using MCP servers (10+ additional tools)
+#    - Agents requiring diverse capabilities (search + compute + code)
+#
+# 6. HOW TO EXTEND:
+#    - Add MCP servers: Uncomment mcp_servers section above
+#    - Add more built-in tools: Add to 'tools' list
+#    - Adjust max_tools: Set to ~1/3 of total tools (min 5, max 8)
+#    - Update prompt: Add new tool categories with examples
+#
+# For more information, see: docs/TOOL_SELECTION_GUIDE.md
+#
+# ==============================================================================

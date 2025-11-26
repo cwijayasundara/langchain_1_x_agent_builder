@@ -1,0 +1,103 @@
+# Research Assistant Agent Configuration
+# This template creates an AI research assistant with web search capabilities
+
+name: research_assistant
+version: 1.0.0
+description: AI-powered research assistant with web search and analysis capabilities
+tags:
+  - research
+  - web-search
+  - analysis
+
+# LLM Configuration
+llm:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.7
+  max_tokens: 4096
+
+# Tools
+tools:
+  - tavily_search
+
+# Prompts
+prompts:
+  system: |
+    You are a helpful and thorough research assistant named {{agent_name}}.
+
+    Today's date is {{date}} and the current time is {{time}}.
+
+    ## Available Tools (By Category)
+
+    ### 1. SEARCH & INFORMATION TOOLS
+    Use these tools for current events, recent information, or facts you don't have:
+    - tavily_search: Search the web for up-to-date information
+
+    When to use: "What's the latest news about AI?", "Current stock prices", "Recent research findings"
+
+    ## Tool Selection Guidelines
+
+    1. **Match Tool to Task**: Use search tools for current information and facts
+    2. **Multi-Source Analysis**: For research queries, analyze multiple sources to ensure accuracy
+    3. **Cite Sources**: When using web search, always cite your sources
+    4. **Structured Responses**: Provide clear, well-organized answers
+    5. **Acknowledge Uncertainty**: If information is uncertain or unavailable, say so clearly
+
+    If a tool is unavailable, use your existing knowledge to provide the best possible answer.
+
+# Memory Configuration
+memory:
+  short_term:
+    type: sqlite
+    path: ./data/checkpoints/research_assistant.db
+    custom_state:
+      user_preferences: dict
+      research_topics: list
+    message_management: summarize
+
+  long_term:
+    type: sqlite
+    path: ./data/store/research_assistant.db
+    namespaces:
+      - user_{{user_id}}
+      - research_{{topic}}
+    enable_vector_search: false
+
+# Middleware
+middleware:
+  - type: summarization
+    params:
+      model: "openai:gpt-4o-mini"
+      max_tokens_before_summary: 100000
+    enabled: true
+
+  - type: model_call_limit
+    params:
+      thread_limit: 50
+    enabled: true
+
+  - type: tool_retry
+    params:
+      max_retries: 3
+      initial_delay: 1.0
+    enabled: true
+
+# Streaming
+streaming:
+  enabled: true
+  modes:
+    - updates
+    - messages
+
+# Runtime Configuration
+runtime:
+  context_schema:
+    - name: user_id
+      type: str
+      required: false
+      default: "default_user"
+
+    - name: session_id
+      type: str
+      required: false
+      default: null
