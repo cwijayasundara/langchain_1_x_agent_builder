@@ -84,6 +84,9 @@ def handle_send_message(user_input: str, streaming: bool = False):
     try:
         api_client = get_api_client()
 
+        # Get pending runtime override (if any)
+        runtime_override = st.session_state.get('pending_runtime_override')
+
         if streaming:
             # Streaming mode - handled separately
             st.session_state.streaming_active = True
@@ -94,7 +97,8 @@ def handle_send_message(user_input: str, streaming: bool = False):
                     agent_id=agent_id,
                     messages=messages_payload,
                     thread_id=thread_id,
-                    context=context_values if context_values else None
+                    context=context_values if context_values else None,
+                    runtime_override=runtime_override
                 )
 
             if response.get('success', True):

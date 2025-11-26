@@ -55,6 +55,13 @@ class AgentFactory:
         self.mcp_server_manager = mcp_server_manager  # May be None if not using references
         self._agents: Dict[str, Any] = {}  # Cache of created agents
 
+        # Session override cache: Key = "{agent_name}:{thread_id}"
+        # Value = {"override": RuntimeOverride, "variant_agent": agent, "system_prompt": str, "created_at": datetime}
+        self._session_overrides: Dict[str, Dict[str, Any]] = {}
+
+        # LLM instance cache for reuse: Key = "{provider}:{model}:{temperature}"
+        self._llm_cache: Dict[str, BaseChatModel] = {}
+
     def _map_provider_name(self, provider: str) -> str:
         """
         Map provider names from config to LangChain's expected provider names.
@@ -1018,3 +1025,389 @@ class AgentFactory:
             "thread_continuity": True,  # Always true since memory paths preserved
             "deployment_info": deployment_result
         }
+
+    # ==================== Runtime Override Methods ====================
+
+    async def get_agent_with_override(
+        self,
+        agent_name: str,
+        thread_id: str,
+        override: Optional["RuntimeOverride"] = None
+    ) -> tuple[Any, str]:
+        """
+        Get agent instance, applying runtime overrides if specified.
+
+        This method supports session-based persistence: if an override was previously
+        applied with persist_for_session=True, it will be reused for subsequent
+        requests on the same thread.
+
+        Args:
+            agent_name: Name of the base agent
+            thread_id: Thread ID for session tracking
+            override: Optional runtime override configuration
+
+        Returns:
+            Tuple of (agent_instance, effective_system_prompt)
+            Returns (None, "") if agent not found
+        """
+        from agent_api.models.schemas import RuntimeOverride
+
+        session_key = f"{agent_name}:{thread_id}"
+
+        # Check for persisted session override first (if no new override provided)
+        if override is None and session_key in self._session_overrides:
+            cached = self._session_overrides[session_key]
+            logger.info(f"Using cached session override for {session_key}")
+            return cached["variant_agent"], cached["system_prompt"]
+
+        # No override - return base agent
+        if override is None:
+            agent = await self.get_agent(agent_name)
+            if not agent:
+                return None, ""
+            metadata = self.get_agent_metadata(agent_name)
+            if not metadata:
+                return None, ""
+            config = metadata["config"]
+            system_prompt = self.get_system_prompt(config)
+            return agent, system_prompt
+
+        # Apply override and create variant agent
+        logger.info(f"Creating variant agent with override for {agent_name}")
+        variant_agent, system_prompt = await self._create_variant_agent(agent_name, override)
+
+        # Cache the variant if this is a session override (always persist for session per design)
+        self._session_overrides[session_key] = {
+            "override": override,
+            "variant_agent": variant_agent,
+            "system_prompt": system_prompt,
+            "created_at": datetime.now()
+        }
+        logger.info(f"Cached session override for {session_key}")
+
+        return variant_agent, system_prompt
+
+    async def _create_variant_agent(
+        self,
+        agent_name: str,
+        override: "RuntimeOverride"
+    ) -> tuple[Any, str]:
+        """
+        Create a variant agent with applied overrides.
+
+        This creates a NEW agent instance with the overridden configuration.
+        The base agent in cache is NOT modified.
+
+        Args:
+            agent_name: Name of the base agent
+            override: Runtime override configuration
+
+        Returns:
+            Tuple of (variant_agent_instance, effective_system_prompt)
+
+        Raises:
+            AgentFactoryError: If agent not found or creation fails
+        """
+        # Get base agent metadata
+        metadata = self.get_agent_metadata(agent_name)
+        if not metadata:
+            # Try lazy loading
+            agent = await self.get_agent(agent_name)
+            metadata = self.get_agent_metadata(agent_name)
+            if not metadata:
+                raise AgentFactoryError(f"Agent not found: {agent_name}")
+
+        base_config = metadata["config"]
+
+        # 1. Resolve LLM (use cached or create new)
+        model = await self._resolve_llm_override(base_config, override.llm)
+
+        # 2. Resolve tools
+        tools = await self._resolve_tools_override(base_config, override.tools)
+
+        # 3. Determine if tools changed for prompt auto-update
+        tools_changed = override.tools is not None
+        tools_for_doc = tools if override.auto_update_prompt and tools_changed else None
+
+        # 4. Resolve system prompt (with auto-update if tools changed)
+        system_prompt = self._resolve_prompt_override(
+            base_config,
+            override.prompt,
+            tools_for_doc
+        )
+
+        # 5. Reuse checkpointer from base agent (for conversation continuity)
+        checkpointer = self.create_checkpointer(base_config)
+
+        # 6. Create middleware (using overridden LLM)
+        middleware = self.middleware_factory.create_middleware_list(base_config, llm=model)
+
+        # 7. Build create_agent parameters
+        agent_params = {
+            "model": model,
+            "tools": tools,
+            "system_prompt": system_prompt,
+        }
+
+        if checkpointer:
+            agent_params["checkpointer"] = checkpointer
+
+        if middleware:
+            agent_params["middleware"] = middleware
+
+        # 8. Create variant agent
+        variant_agent = create_agent(**agent_params)
+        logger.info(
+            f"Created variant agent for '{agent_name}' with "
+            f"{len(tools)} tools, LLM={override.llm.provider if override.llm and override.llm.provider else 'base'}:"
+            f"{override.llm.model if override.llm and override.llm.model else 'base'}"
+        )
+
+        return variant_agent, system_prompt
+
+    async def _resolve_llm_override(
+        self,
+        base_config: AgentConfig,
+        llm_override: Optional["LLMOverride"]
+    ) -> BaseChatModel:
+        """
+        Resolve LLM with override, using cache when possible.
+
+        Args:
+            base_config: Base agent configuration
+            llm_override: Optional LLM override
+
+        Returns:
+            LLM instance (may be cached)
+        """
+        from agent_api.models.config_schema import LLMConfig
+
+        if llm_override is None:
+            # Return LLM from base config
+            return self.create_llm(base_config)
+
+        # Build effective LLM config by merging override with base
+        effective_provider = llm_override.provider or base_config.llm.provider
+        effective_model = llm_override.model or base_config.llm.model
+        effective_temperature = llm_override.temperature if llm_override.temperature is not None else base_config.llm.temperature
+        effective_max_tokens = llm_override.max_tokens or base_config.llm.max_tokens
+        effective_api_key = llm_override.api_key or base_config.llm.api_key
+
+        # Check LLM cache
+        cache_key = f"{effective_provider}:{effective_model}:{effective_temperature}"
+        if cache_key in self._llm_cache:
+            logger.debug(f"Using cached LLM: {cache_key}")
+            return self._llm_cache[cache_key]
+
+        # Create effective config
+        effective_llm_config = LLMConfig(
+            provider=effective_provider,
+            model=effective_model,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            api_key=effective_api_key,
+        )
+
+        # Create temporary AgentConfig for LLM creation
+        temp_config = AgentConfig(
+            name=base_config.name,
+            llm=effective_llm_config,
+            prompts=base_config.prompts,
+        )
+
+        # Create new LLM and cache it
+        llm = self.create_llm(temp_config)
+        self._llm_cache[cache_key] = llm
+        logger.info(f"Created and cached LLM: {cache_key}")
+        return llm
+
+    async def _resolve_tools_override(
+        self,
+        base_config: AgentConfig,
+        tools_override: Optional["ToolsOverride"]
+    ) -> List[BaseTool]:
+        """
+        Resolve tools with override.
+
+        Args:
+            base_config: Base agent configuration
+            tools_override: Optional tools override
+
+        Returns:
+            List of resolved tools
+        """
+        if tools_override is None:
+            # Return base tools
+            builtin_tools = self.tool_registry.get_tools(base_config.tools)
+            _, mcp_tools = await self.create_mcp_tools(base_config)
+            return builtin_tools + mcp_tools
+
+        tools = []
+
+        # Built-in tools
+        if tools_override.builtin_tools is not None:
+            tools.extend(self.tool_registry.get_tools(tools_override.builtin_tools))
+            logger.debug(f"Using override builtin tools: {tools_override.builtin_tools}")
+        else:
+            # Use base config tools
+            tools.extend(self.tool_registry.get_tools(base_config.tools))
+
+        # MCP tools
+        if tools_override.mcp_servers is not None:
+            # Create temporary config with overridden MCP servers
+            mcp_configs = []
+            for server_name in tools_override.mcp_servers:
+                try:
+                    server_def = self.mcp_server_manager.load_server(server_name)
+                    selected_tools = None
+                    if tools_override.mcp_selected_tools and server_name in tools_override.mcp_selected_tools:
+                        selected_tools = tools_override.mcp_selected_tools[server_name]
+
+                    mcp_configs.append(MCPServerConfig(
+                        name=server_def.name,
+                        description=server_def.description,
+                        transport=server_def.transport,
+                        url=server_def.url,
+                        command=server_def.command,
+                        args=server_def.args,
+                        env=server_def.env,
+                        stateful=server_def.stateful,
+                        selected_tools=selected_tools,
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to load MCP server {server_name}: {e}")
+
+            if mcp_configs:
+                temp_config = AgentConfig(
+                    name=base_config.name,
+                    llm=base_config.llm,
+                    prompts=base_config.prompts,
+                    mcp_servers=mcp_configs,
+                )
+                _, mcp_tools = await self.create_mcp_tools(temp_config)
+                tools.extend(mcp_tools)
+                logger.debug(f"Using override MCP servers: {tools_override.mcp_servers}")
+        elif base_config.mcp_servers:
+            # Use base config MCP servers
+            _, mcp_tools = await self.create_mcp_tools(base_config)
+            tools.extend(mcp_tools)
+
+        return tools
+
+    def _resolve_prompt_override(
+        self,
+        base_config: AgentConfig,
+        prompt_override: Optional["PromptOverride"],
+        tools_for_doc: Optional[List[BaseTool]] = None
+    ) -> str:
+        """
+        Resolve system prompt with override.
+
+        If tools_for_doc is provided, regenerates tool documentation section.
+
+        Args:
+            base_config: Base agent configuration
+            prompt_override: Optional prompt override (prepend/append)
+            tools_for_doc: Optional tools list for auto-documentation
+
+        Returns:
+            Effective system prompt
+        """
+        base_prompt = self.get_system_prompt(base_config)
+
+        # Auto-update tool documentation if tools changed
+        if tools_for_doc:
+            tool_docs = self._generate_tool_documentation(tools_for_doc)
+            base_prompt = f"{base_prompt}\n\n## Available Tools\n{tool_docs}"
+            logger.debug(f"Auto-updated system prompt with {len(tools_for_doc)} tool docs")
+
+        if prompt_override is None:
+            return base_prompt
+
+        # Apply prepend/append
+        result = base_prompt
+        if prompt_override.prepend:
+            result = f"{prompt_override.prepend}\n\n{result}"
+            logger.debug("Applied prompt prepend")
+        if prompt_override.append:
+            result = f"{result}\n\n{prompt_override.append}"
+            logger.debug("Applied prompt append")
+
+        return result
+
+    def _generate_tool_documentation(self, tools: List[BaseTool]) -> str:
+        """
+        Generate tool documentation for system prompt.
+
+        Args:
+            tools: List of tools to document
+
+        Returns:
+            Formatted tool documentation string
+        """
+        if not tools:
+            return "No tools available."
+
+        doc_lines = []
+        for tool in tools:
+            name = tool.name
+            description = tool.description or "No description"
+            doc_lines.append(f"- **{name}**: {description}")
+
+        return "\n".join(doc_lines)
+
+    def clear_session_override(self, agent_name: str, thread_id: str) -> bool:
+        """
+        Clear a persisted session override, reverting to base agent.
+
+        Args:
+            agent_name: Name of the agent
+            thread_id: Thread ID for the session
+
+        Returns:
+            True if override was cleared, False if not found
+        """
+        session_key = f"{agent_name}:{thread_id}"
+        if session_key in self._session_overrides:
+            del self._session_overrides[session_key]
+            logger.info(f"Cleared session override for {session_key}")
+            return True
+        return False
+
+    def get_session_override(self, agent_name: str, thread_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get current session override if any.
+
+        Args:
+            agent_name: Name of the agent
+            thread_id: Thread ID for the session
+
+        Returns:
+            Session override data or None
+        """
+        session_key = f"{agent_name}:{thread_id}"
+        return self._session_overrides.get(session_key)
+
+    def list_session_overrides(self, agent_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        List all active session overrides, optionally filtered by agent.
+
+        Args:
+            agent_name: Optional agent name to filter by
+
+        Returns:
+            List of session override summaries
+        """
+        result = []
+        for key, data in self._session_overrides.items():
+            agent, thread = key.split(":", 1)
+            if agent_name is None or agent == agent_name:
+                result.append({
+                    "agent_name": agent,
+                    "thread_id": thread,
+                    "created_at": data["created_at"],
+                    "has_llm_override": data["override"].llm is not None,
+                    "has_tools_override": data["override"].tools is not None,
+                    "has_prompt_override": data["override"].prompt is not None,
+                })
+        return result

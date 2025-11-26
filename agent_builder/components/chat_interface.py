@@ -166,6 +166,9 @@ def handle_send_message_non_streaming(agent_id: str, user_input: str):
     thread_id = st.session_state.get('chat_thread_id')
     context_values = st.session_state.get('chat_context_values', {})
 
+    # Get pending runtime override (if any)
+    runtime_override = st.session_state.get('test_pending_override')
+
     try:
         api_client = get_api_client()
 
@@ -174,7 +177,8 @@ def handle_send_message_non_streaming(agent_id: str, user_input: str):
                 agent_id=agent_id,
                 messages=messages_payload,
                 thread_id=thread_id,
-                context=context_values if context_values else None
+                context=context_values if context_values else None,
+                runtime_override=runtime_override
             )
 
         if response.get('success', True):

@@ -14,21 +14,81 @@ from utils.yaml_generator import generate_agent_yaml, get_config_dict
 from utils.api_client import get_api_client
 from components.navigation import display_page_header
 from components.chat_interface import display_full_chat_interface
+from components.test_override_panel import display_test_override_panel, display_test_override_status
 
 initialize_session_state()
 st.set_page_config(page_title="Deploy", page_icon="✅", layout="wide")
 apply_custom_styles()
 
-col1, col2 = st.columns([3, 2])
+# Get page data upfront
+page_1_data = get_page_data(1)
+page_2_data = get_page_data(2)
+page_3_data = get_page_data(3)
+page_4_data = get_page_data(4)
+page_5_data = get_page_data(5)
+page_6_data = get_page_data(6)
+page_7_data = get_page_data(7)
 
-with col1:
+# Check if agent is deployed - determines layout
+is_deployed = st.session_state.get('deployment_success', False)
+agent_id = st.session_state.get('deployed_agent_id')
+agent_name = st.session_state.get('deployed_agent_name', 'Your Agent')
+
+
+# ============================================================================
+# YAML Config Dialog
+# ============================================================================
+@st.dialog("Complete Configuration", width="large")
+def show_yaml_config_dialog():
+    """Display full YAML configuration in a dialog."""
+    yaml_content = generate_agent_yaml()
+
+    # Stats at the top
+    st.markdown("### 📊 Configuration Stats")
+    stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+
+    with stats_col1:
+        st.metric("Tools", len(page_3_data.get('tools', [])))
+
+    with stats_col2:
+        st.metric("Middleware", len(page_6_data.get('middleware', [])))
+
+    with stats_col3:
+        memory_count = 0
+        if page_5_data.get('short_term', {}).get('enabled'):
+            memory_count += 1
+        if page_5_data.get('long_term', {}).get('enabled'):
+            memory_count += 1
+        st.metric("Memory Systems", memory_count)
+
+    with stats_col4:
+        streaming_count = len(page_7_data.get('streaming', {}).get('modes', []))
+        st.metric("Streaming Modes", streaming_count)
+
+    st.markdown("---")
+    st.markdown("### 📄 YAML Configuration")
+    st.code(yaml_content, language='yaml', line_numbers=True)
+
+    # Download button
+    st.download_button(
+        label="⬇️ Download YAML",
+        data=yaml_content,
+        file_name=f"{page_1_data.get('name', 'agent')}_config.yaml",
+        mime="text/yaml",
+        use_container_width=True
+    )
+
+
+# ============================================================================
+# Main Content - Before Deployment (Full Width)
+# ============================================================================
+if not is_deployed:
     display_page_header(8, "Deploy & Review", "Review your configuration, validate, and deploy your agent.")
 
     # Configuration Summary
     st.markdown("### 📋 Configuration Summary")
 
     # Basic Info
-    page_1_data = get_page_data(1)
     with st.expander("**📝 Basic Info**", expanded=True):
         st.markdown(f"""
         - **Name:** `{page_1_data.get('name', 'N/A')}`
@@ -38,7 +98,6 @@ with col1:
         """)
 
     # LLM Config
-    page_2_data = get_page_data(2)
     with st.expander("**🤖 LLM Configuration**"):
         st.markdown(f"""
         - **Provider:** {page_2_data.get('provider', 'N/A')}
@@ -48,7 +107,6 @@ with col1:
         """)
 
     # Tools
-    page_3_data = get_page_data(3)
     with st.expander("**🔧 Tools**"):
         tools = page_3_data.get('tools', [])
         if tools:
@@ -58,7 +116,6 @@ with col1:
             st.markdown("No tools selected")
 
     # Prompts
-    page_4_data = get_page_data(4)
     with st.expander("**💬 Prompts**"):
         system_prompt_preview = page_4_data.get('system_prompt', 'N/A')
         if len(system_prompt_preview) > 150:
@@ -68,7 +125,6 @@ with col1:
             st.markdown(f"**User Template:** {page_4_data.get('user_template')}")
 
     # Memory
-    page_5_data = get_page_data(5)
     with st.expander("**🧠 Memory**"):
         st_enabled = page_5_data.get('short_term', {}).get('enabled', False)
         lt_enabled = page_5_data.get('long_term', {}).get('enabled', False)
@@ -78,7 +134,6 @@ with col1:
         """)
 
     # Middleware
-    page_6_data = get_page_data(6)
     with st.expander("**⚙️ Middleware**"):
         middleware = page_6_data.get('middleware', [])
         if middleware:
@@ -89,13 +144,16 @@ with col1:
             st.markdown("No middleware configured")
 
     # Advanced
-    page_7_data = get_page_data(7)
     with st.expander("**🚀 Advanced Settings**"):
         streaming_enabled = page_7_data.get('streaming', {}).get('enabled', False)
         st.markdown(f"**Streaming:** {'✅ Enabled' if streaming_enabled else '❌ Disabled'}")
         if streaming_enabled:
             modes = page_7_data.get('streaming', {}).get('modes', [])
             st.caption(f"Modes: {', '.join(modes) if modes else 'None'}")
+
+    # View Full YAML Config button
+    if st.button("📄 View Full YAML Config", use_container_width=False):
+        show_yaml_config_dialog()
 
     st.markdown("---")
 
@@ -158,16 +216,14 @@ with col1:
                     st.session_state.validation_passed = False
 
     with col_val2:
-        if st.button("📥 Download YAML", use_container_width=True):
-            yaml_content = generate_agent_yaml()
-            agent_name = page_1_data.get('name', 'agent')
-            st.download_button(
-                label="⬇️ Download Configuration",
-                data=yaml_content,
-                file_name=f"{agent_name}_config.yaml",
-                mime="text/yaml",
-                use_container_width=True
-            )
+        yaml_content = generate_agent_yaml()
+        st.download_button(
+            label="📥 Download YAML",
+            data=yaml_content,
+            file_name=f"{page_1_data.get('name', 'agent')}_config.yaml",
+            mime="text/yaml",
+            use_container_width=True
+        )
 
     st.markdown("---")
 
@@ -211,6 +267,7 @@ with col1:
 
                             # Set test agent for chat
                             set_test_agent(agent_id)
+                            st.rerun()
                         else:
                             st.error("❌ Deployment failed")
                             error_msg = result.get('error', 'Unknown error')
@@ -229,31 +286,6 @@ with col1:
 
     st.markdown("---")
 
-    # Test Chat Section (only show if agent is deployed)
-    if st.session_state.get('deployment_success', False):
-        agent_id = st.session_state.get('deployed_agent_id')
-        agent_name = st.session_state.get('deployed_agent_name', 'Your Agent')
-
-        if agent_id:
-            st.markdown("### 🧪 Test Your Agent")
-
-            # Expandable test interface
-            with st.expander("💬 Interactive Chat Test", expanded=True):
-                st.markdown("""
-                Test your deployed agent with real queries. This is a full-featured chat interface with:
-                - **Real-time messaging** (streaming and non-streaming modes)
-                - **Conversation history** within this session
-                - **Tool call visualization** to see what tools your agent uses
-                - **Context support** for runtime variables
-                """)
-
-                st.markdown("---")
-
-                # Display the full chat interface
-                display_full_chat_interface(agent_id, agent_name)
-
-            st.markdown("---")
-
     # Navigation
     col_b1, col_b2 = st.columns(2)
     with col_b1:
@@ -264,42 +296,60 @@ with col1:
         if st.button("🏠 Home", use_container_width=True):
             st.switch_page("app.py")
 
-with col2:
-    st.markdown("### 📄 Complete Configuration")
 
-    yaml_content = generate_agent_yaml()
-    st.code(yaml_content, language='yaml', line_numbers=True)
+# ============================================================================
+# Main Content - After Deployment (Two-Column Layout: Chat | Overrides)
+# ============================================================================
+else:
+    # Two-column layout: Chat on left, Runtime Overrides on right
+    col_chat, col_overrides = st.columns([3, 1])
 
-    # Stats
-    st.markdown("---")
-    st.markdown("### 📊 Configuration Stats")
+    with col_chat:
+        st.markdown(f"## 🧪 Test Your Agent: {agent_name}")
+        st.caption(f"Agent ID: `{agent_id}`")
 
-    config_dict = get_config_dict()
+        # Show override status if active
+        display_test_override_status()
 
-    stats_col1, stats_col2 = st.columns(2)
+        st.markdown("---")
 
-    with stats_col1:
-        st.metric("Tools", len(page_3_data.get('tools', [])))
-        st.metric("Middleware", len(page_6_data.get('middleware', [])))
+        # Chat description
+        st.markdown("""
+        Test your deployed agent with real queries:
+        - **Real-time messaging** with streaming support
+        - **Tool call visualization** to see agent actions
+        - **Runtime overrides** to test different configurations
+        """)
 
-    with stats_col2:
-        memory_count = 0
-        if page_5_data.get('short_term', {}).get('enabled'):
-            memory_count += 1
-        if page_5_data.get('long_term', {}).get('enabled'):
-            memory_count += 1
-        st.metric("Memory Systems", memory_count)
+        st.markdown("---")
 
-        streaming_count = len(page_7_data.get('streaming', {}).get('modes', []))
-        st.metric("Streaming Modes", streaming_count)
+        # Display the full chat interface
+        if agent_id:
+            display_full_chat_interface(agent_id, agent_name)
 
-    # Tips
-    st.markdown("---")
-    st.markdown("### 💡 Deployment Tips")
-    st.info("""
-    - Always validate before deploying
-    - Test with sample queries first
-    - Monitor resource usage
-    - Keep your configuration backed up
-    - Update API keys securely
-    """)
+        st.markdown("---")
+
+        # Action buttons
+        col_action1, col_action2, col_action3 = st.columns(3)
+
+        with col_action1:
+            if st.button("📄 View Config", use_container_width=True):
+                show_yaml_config_dialog()
+
+        with col_action2:
+            if st.button("🔄 New Agent", use_container_width=True):
+                reset_all_state()
+                st.success("✅ Session reset!")
+                st.rerun()
+
+        with col_action3:
+            if st.button("🏠 Home", use_container_width=True):
+                st.switch_page("app.py")
+
+    with col_overrides:
+        st.markdown("### ⚙️ Runtime Overrides")
+        st.caption("Test with different configurations without redeploying.")
+
+        # Display the runtime override panel
+        if agent_id:
+            display_test_override_panel(agent_id)

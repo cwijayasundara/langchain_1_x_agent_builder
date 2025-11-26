@@ -53,18 +53,33 @@ async def invoke_agent(
     """
     Invoke an agent with a message (non-streaming).
 
+    Supports runtime overrides for LLM, tools, and prompt via the
+    runtime_override field. Overrides persist for the session (thread).
+
     Args:
         agent_id: Agent identifier
-        request: Invocation request with messages and context
+        request: Invocation request with messages, context, and optional runtime_override
 
     Returns:
         Agent response
     """
-    logger.info(f"Agent invocation request: agent_id={agent_id}, thread_id={request.thread_id}, message_count={len(request.messages)}")
+    has_override = request.runtime_override is not None
+    logger.info(
+        f"Agent invocation request: agent_id={agent_id}, thread_id={request.thread_id}, "
+        f"message_count={len(request.messages)}, has_override={has_override}"
+    )
 
     try:
-        # Get agent
-        agent = await agent_factory.get_agent(agent_id)
+        # Generate thread_id early since we need it for override lookup
+        thread_id = request.thread_id or str(uuid4())
+
+        # Get agent with override applied (uses session cache)
+        agent, effective_system_prompt = await agent_factory.get_agent_with_override(
+            agent_name=agent_id,
+            thread_id=thread_id,
+            override=request.runtime_override
+        )
+
         if not agent:
             logger.warning(f"Agent not found or not deployed: {agent_id}")
             return APIResponse(
@@ -75,7 +90,7 @@ async def invoke_agent(
                 ),
             )
 
-        logger.debug(f"Retrieved agent '{agent_id}' from factory")
+        logger.debug(f"Retrieved agent '{agent_id}' from factory (override={has_override})")
 
         # Get agent metadata for store access
         metadata = agent_factory.get_agent_metadata(agent_id)
@@ -93,8 +108,7 @@ async def invoke_agent(
             "configurable": {}
         }
 
-        # Add thread ID for conversation continuity
-        thread_id = request.thread_id or str(uuid4())
+        # Add thread ID for conversation continuity (already generated above)
         config["configurable"]["thread_id"] = thread_id
 
         logger.debug(f"Using thread_id: {thread_id}")
@@ -460,6 +474,201 @@ async def undeploy_agent(
             success=False,
             error=ErrorDetail(
                 code="UNDEPLOY_ERROR",
+                message=str(e),
+            ),
+        )
+
+
+# ==================== Runtime Override Endpoints ====================
+
+
+@router.get("/{agent_id}/available-tools", response_model=APIResponse)
+async def get_available_tools(
+    agent_id: str,
+    agent_factory: AgentFactory = Depends(get_agent_factory),
+):
+    """
+    Get all available tools for runtime override selection.
+
+    Returns:
+        - builtin_tools: List of all registered built-in tools with metadata
+        - mcp_servers: List of all available MCP servers
+        - current_tools: Currently configured tools for this agent
+        - current_mcp_servers: Currently configured MCP servers for this agent
+    """
+    from agent_api.dependencies import get_tool_registry, get_mcp_server_manager
+
+    try:
+        tool_registry = get_tool_registry()
+        mcp_server_manager = get_mcp_server_manager()
+
+        # Get all built-in tools with metadata
+        builtin_tools = tool_registry.list_tools()
+
+        # Get all MCP servers
+        mcp_servers = []
+        if mcp_server_manager:
+            mcp_servers = mcp_server_manager.list_servers()
+
+        # Get agent's current config
+        metadata = agent_factory.get_agent_metadata(agent_id)
+        current_config = metadata["config"] if metadata else None
+
+        current_tools = []
+        current_mcp_servers = []
+
+        if current_config:
+            current_tools = current_config.tools or []
+            if current_config.mcp_servers:
+                for s in current_config.mcp_servers:
+                    if hasattr(s, 'name'):
+                        current_mcp_servers.append(s.name)
+                    elif hasattr(s, 'ref'):
+                        current_mcp_servers.append(s.ref)
+                    elif isinstance(s, dict):
+                        current_mcp_servers.append(s.get('ref', s.get('name', '')))
+
+        return APIResponse(
+            success=True,
+            data={
+                "builtin_tools": builtin_tools,
+                "mcp_servers": mcp_servers,
+                "current_tools": current_tools,
+                "current_mcp_servers": current_mcp_servers,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting available tools: {str(e)}", exc_info=True)
+        return APIResponse(
+            success=False,
+            error=ErrorDetail(
+                code="TOOLS_ERROR",
+                message=str(e),
+            ),
+        )
+
+
+@router.get("/{agent_id}/session-override/{thread_id}", response_model=APIResponse)
+async def get_session_override(
+    agent_id: str,
+    thread_id: str,
+    agent_factory: AgentFactory = Depends(get_agent_factory),
+):
+    """
+    Get current session override for a thread.
+
+    Args:
+        agent_id: Agent identifier
+        thread_id: Thread/session identifier
+
+    Returns:
+        Current override configuration if any
+    """
+    try:
+        override_data = agent_factory.get_session_override(agent_id, thread_id)
+
+        if override_data:
+            # Serialize the override for response
+            override = override_data.get("override")
+            return APIResponse(
+                success=True,
+                data={
+                    "has_override": True,
+                    "override": override.model_dump() if override else None,
+                    "created_at": override_data.get("created_at").isoformat() if override_data.get("created_at") else None,
+                }
+            )
+        else:
+            return APIResponse(
+                success=True,
+                data={
+                    "has_override": False,
+                    "override": None,
+                    "created_at": None,
+                }
+            )
+
+    except Exception as e:
+        logger.error(f"Error getting session override: {str(e)}", exc_info=True)
+        return APIResponse(
+            success=False,
+            error=ErrorDetail(
+                code="SESSION_OVERRIDE_ERROR",
+                message=str(e),
+            ),
+        )
+
+
+@router.delete("/{agent_id}/session-override/{thread_id}", response_model=APIResponse)
+async def clear_session_override(
+    agent_id: str,
+    thread_id: str,
+    agent_factory: AgentFactory = Depends(get_agent_factory),
+):
+    """
+    Clear session override for a thread, reverting to base agent.
+
+    Args:
+        agent_id: Agent identifier
+        thread_id: Thread/session identifier
+
+    Returns:
+        Whether override was cleared
+    """
+    try:
+        cleared = agent_factory.clear_session_override(agent_id, thread_id)
+
+        return APIResponse(
+            success=True,
+            data={
+                "cleared": cleared,
+                "message": "Session override cleared, reverted to base agent" if cleared else "No session override found",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error clearing session override: {str(e)}", exc_info=True)
+        return APIResponse(
+            success=False,
+            error=ErrorDetail(
+                code="CLEAR_OVERRIDE_ERROR",
+                message=str(e),
+            ),
+        )
+
+
+@router.get("/{agent_id}/session-overrides", response_model=APIResponse)
+async def list_session_overrides(
+    agent_id: str,
+    agent_factory: AgentFactory = Depends(get_agent_factory),
+):
+    """
+    List all active session overrides for an agent.
+
+    Args:
+        agent_id: Agent identifier
+
+    Returns:
+        List of active session overrides
+    """
+    try:
+        overrides = agent_factory.list_session_overrides(agent_name=agent_id)
+
+        return APIResponse(
+            success=True,
+            data={
+                "overrides": overrides,
+                "total": len(overrides),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing session overrides: {str(e)}", exc_info=True)
+        return APIResponse(
+            success=False,
+            error=ErrorDetail(
+                code="LIST_OVERRIDES_ERROR",
                 message=str(e),
             ),
         )

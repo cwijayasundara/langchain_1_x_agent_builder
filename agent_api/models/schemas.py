@@ -214,6 +214,103 @@ class MessageInput(BaseModel):
     content: str = Field(description="Message content")
 
 
+# ==================== Runtime Override Models ====================
+
+
+class LLMOverride(BaseModel):
+    """LLM override configuration for runtime."""
+    provider: Optional[str] = Field(
+        default=None,
+        description="LLM provider override (e.g., 'openrouter', 'openai', 'anthropic')"
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Model name override (e.g., 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet')"
+    )
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Temperature override"
+    )
+    max_tokens: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Max tokens override"
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Optional API key for override provider"
+    )
+
+
+class ToolsOverride(BaseModel):
+    """Tools override configuration for runtime."""
+    builtin_tools: Optional[List[str]] = Field(
+        default=None,
+        description="List of built-in tool IDs to use (replaces agent's configured tools)"
+    )
+    mcp_servers: Optional[List[str]] = Field(
+        default=None,
+        description="List of MCP server names to include (replaces agent's configured MCP servers)"
+    )
+    mcp_selected_tools: Optional[Dict[str, List[str]]] = Field(
+        default=None,
+        description="Per-MCP-server tool selection: {server_name: [tool_names]}"
+    )
+
+
+class PromptOverride(BaseModel):
+    """Prompt override configuration for runtime (prepend/append only)."""
+    prepend: Optional[str] = Field(
+        default=None,
+        description="Text to prepend to system prompt"
+    )
+    append: Optional[str] = Field(
+        default=None,
+        description="Text to append to system prompt"
+    )
+
+
+class RuntimeOverride(BaseModel):
+    """Complete runtime override configuration for agent invocation."""
+    llm: Optional[LLMOverride] = Field(
+        default=None,
+        description="LLM configuration override"
+    )
+    tools: Optional[ToolsOverride] = Field(
+        default=None,
+        description="Tools configuration override"
+    )
+    prompt: Optional[PromptOverride] = Field(
+        default=None,
+        description="System prompt override (prepend/append)"
+    )
+    auto_update_prompt: bool = Field(
+        default=True,
+        description="If True, regenerate tool documentation in system prompt when tools change"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "llm": {
+                    "provider": "openrouter",
+                    "model": "openai/gpt-4o",
+                    "temperature": 0.5
+                },
+                "tools": {
+                    "builtin_tools": ["tavily_search", "calculator"],
+                    "mcp_servers": ["rag"]
+                },
+                "prompt": {
+                    "append": "Always respond in a formal, professional tone."
+                },
+                "auto_update_prompt": True
+            }
+        }
+
+
 class AgentInvokeRequest(BaseModel):
     """Request to invoke an agent."""
     messages: List[MessageInput] = Field(
@@ -227,9 +324,9 @@ class AgentInvokeRequest(BaseModel):
         default=None,
         description="Thread ID for conversation continuity"
     )
-    config_overrides: Optional[Dict[str, Any]] = Field(
+    runtime_override: Optional[RuntimeOverride] = Field(
         default=None,
-        description="Runtime configuration overrides"
+        description="Runtime configuration overrides for LLM, tools, and prompt"
     )
 
 

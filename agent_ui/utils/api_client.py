@@ -170,17 +170,26 @@ class APIClient:
         messages: List[Dict[str, str]],
         thread_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        config_overrides: Optional[Dict[str, Any]] = None
+        runtime_override: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Invoke agent with messages (non-streaming).
+
+        Supports runtime overrides for LLM, tools, and prompt. Overrides persist
+        for the entire thread/session until cleared.
 
         Args:
             agent_id: Agent identifier
             messages: List of message dicts with role and content
             thread_id: Optional thread ID for conversation continuity
             context: Optional runtime context values
-            config_overrides: Optional configuration overrides
+            runtime_override: Optional runtime override configuration with structure:
+                {
+                    "llm": {"provider": str, "model": str, "temperature": float, "max_tokens": int},
+                    "tools": {"builtin_tools": List[str], "mcp_servers": List[str]},
+                    "prompt": {"prepend": str, "append": str},
+                    "auto_update_prompt": bool  # default True
+                }
 
         Returns:
             Dict with messages, thread_id, and metadata
@@ -195,8 +204,8 @@ class APIClient:
         if context:
             data["context"] = context
 
-        if config_overrides:
-            data["config_overrides"] = config_overrides
+        if runtime_override:
+            data["runtime_override"] = runtime_override
 
         return self._make_request("POST", f"/execution/{agent_id}/invoke", data=data)
 
@@ -246,6 +255,69 @@ class APIClient:
             Dict with tool details
         """
         return self._make_request("GET", f"/tools/{tool_id}")
+
+    # Runtime Override Methods
+
+    def get_available_tools(self, agent_id: str) -> Dict[str, Any]:
+        """
+        Get all available tools for runtime override selection.
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Dict with:
+                - builtin_tools: List of all available built-in tools
+                - mcp_servers: List of all available MCP servers
+                - current_tools: Tools currently configured for this agent
+                - current_mcp_servers: MCP servers currently configured for this agent
+        """
+        return self._make_request("GET", f"/execution/{agent_id}/available-tools")
+
+    def get_session_override(self, agent_id: str, thread_id: str) -> Dict[str, Any]:
+        """
+        Get current session override for a thread.
+
+        Args:
+            agent_id: Agent identifier
+            thread_id: Thread/session identifier
+
+        Returns:
+            Dict with:
+                - has_override: bool
+                - override: Override configuration if any
+                - created_at: When override was applied
+        """
+        return self._make_request("GET", f"/execution/{agent_id}/session-override/{thread_id}")
+
+    def clear_session_override(self, agent_id: str, thread_id: str) -> Dict[str, Any]:
+        """
+        Clear session override for a thread, reverting to base agent.
+
+        Args:
+            agent_id: Agent identifier
+            thread_id: Thread/session identifier
+
+        Returns:
+            Dict with:
+                - cleared: bool
+                - message: str
+        """
+        return self._make_request("DELETE", f"/execution/{agent_id}/session-override/{thread_id}")
+
+    def list_session_overrides(self, agent_id: str) -> Dict[str, Any]:
+        """
+        List all active session overrides for an agent.
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Dict with:
+                - overrides: List of active session overrides
+                - total: Total count
+        """
+        return self._make_request("GET", f"/execution/{agent_id}/session-overrides")
 
 
 @st.cache_resource

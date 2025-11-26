@@ -14,6 +14,7 @@ from components.chat_interface import display_chat_container, display_chat_input
 from components.thread_panel import display_thread_panel
 from components.context_editor import display_context_summary
 from components.agent_reconfiguration import display_reconfigure_button, display_reconfigure_dialog
+from components.runtime_override_panel import display_runtime_override_panel, display_override_status
 
 initialize_session_state()
 st.set_page_config(
@@ -50,6 +51,9 @@ with col1:
     # Thread controls
     display_thread_controls()
 
+    # Show override status if active (NEW)
+    display_override_status()
+
     st.markdown("---")
 
     # Reconfiguration dialog (if open)
@@ -77,6 +81,11 @@ with col2:
 
     # Reconfiguration button
     display_reconfigure_button()
+
+    st.markdown("---")
+
+    # Runtime override panel (NEW)
+    display_runtime_override_panel()
 
     st.markdown("---")
 
